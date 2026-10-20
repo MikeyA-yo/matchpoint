@@ -1,6 +1,6 @@
 # MATCHPOINT API guideline (hackathon build)
  
-Status: draft v0.1 for the sprint. Owner: backend (Olaiwon), ML and explainer (Ayomide), catalogue, policies and copy (Abdulhaqeem).
+Status: draft v0.2 for the sprint (adds the rewards module in section 5.5). Owner: backend (Olaiwon), ML and explainer (Ayomide), catalogue, policies and copy (Abdulhaqeem).
  
 MATCHPOINT is a decision layer that sits between a bank's product teams and its customers. It decides what to recommend, when, on which channel, and whether to say nothing. Everything outside the decision layer (transactions, products, profiles, consent, channels) is reached through adapters. In the hackathon those adapters are simulators. In a pilot they are replaced by connectors to Zenith's systems, with no change to the services or endpoints below.
  
@@ -9,7 +9,7 @@ MATCHPOINT is a decision layer that sits between a bank's product teams and its 
 | Service | Responsibility |
 |---|---|
 | Simulator | Simulated clock, synthetic customers with planted ground-truth responses, transaction generator |
-| Adapters | `TransactionFeed`, `ProductCatalogue`, `CustomerProfile`, `ConsentStore`, `ChannelGateway`. Simulated now, real in a pilot |
+| Adapters | `TransactionFeed`, `ProductCatalogue`, `CustomerProfile`, `ConsentStore`, `ChannelGateway`, `RewardsFulfilment`. Simulated now, real in a pilot |
 | Feature store | Per-customer features from transactions: salary regularity, seasonal payments, inflow growth |
 | Detector | Turns features into triggers, then screens them against blocked categories |
 | Matcher | Finds eligible, suitable, not-already-held products |
@@ -21,6 +21,7 @@ MATCHPOINT is a decision layer that sits between a bank's product teams and its 
 | Outcome tracker | Records responses and checks real use at 30 and 60 days |
 | Policy and catalogue service | Versioned rules with an approval step |
 | Experiment runner | Runs several strategies on the same population and compares them |
+| Rewards service | Earn rules, points ledger, tiers, redemption. Awards points for consent and engagement events. Never feeds credit decisions |
  
 ### Adapter interfaces
  
@@ -40,6 +41,9 @@ class ConsentStore(Protocol):
  
 class ChannelGateway(Protocol):
     def send(self, msg: OutboundMessage) -> DeliveryReceipt: ...
+ 
+class RewardsFulfilment(Protocol):
+    def fulfil(self, redemption: Redemption) -> FulfilmentReceipt: ...   # airtime, voucher, fee waiver
 ```
  
 Rule: services never import a simulator directly. They receive adapters by dependency injection, so a pilot swaps the implementation, not the code.
@@ -80,6 +84,17 @@ Rule: services never import a simulator directly. They receive adapters by depen
 | `GOVERNOR_LOST` | Another product won the slot | hold |
 | `CREDIT_REVIEW` | Credit product, needs a person | review |
 | `GUARDRAIL_BLOCKED` | Explainer output failed the safety check | hold |
+ 
+### Rewards reason codes
+ 
+| Code | Meaning | Effect |
+|---|---|---|
+| `REWARD_NO_CONSENT` | The event needs consent that is not on file | no award |
+| `REWARD_DUPLICATE` | One-time or idempotent award already made | no award |
+| `REWARD_CAP_REACHED` | Per-event or 30-day points cap reached | no award |
+| `REWARD_INELIGIBLE` | Event type not in the active rules | no award |
+| `INSUFFICIENT_POINTS` | Balance too low to redeem | redemption refused |
+| `REWARD_OUT_OF_STOCK` | Reward item unavailable | redemption refused |
  
 ## 4. Core data shapes
  
@@ -166,6 +181,59 @@ These are starting values. Zenith sets the real ones and compliance approves cha
  
 `outcome` is one of `send`, `hold`, `silent`, `review`.
  
+### Rewards
+ 
+All point values below are illustrative. Zenith sets the real ones and compliance approves changes.
+ 
+```json
+{
+  "id": "rwd_rules_v1",
+  "status": "active",
+  "earn": [
+    { "event": "consent_granted", "purpose": "personalised_offers", "points": 50, "once": true },
+    { "event": "preferences_reviewed", "points": 20, "max_per_year": 1 },
+    { "event": "offer_feedback", "points": 5, "max_per_30d": 2 },
+    { "event": "product_use_milestone", "milestone_days": 60, "points": 100, "max_per_product": 1 }
+  ],
+  "tiers": [ { "name": "Base", "min_points": 0 }, { "name": "Silver", "min_points": 200 }, { "name": "Gold", "min_points": 600 } ],
+  "max_points_per_30d": 150,
+  "expiry_months": 12,
+  "no_clawback_on_withdrawal": true
+}
+```
+ 
+Reward account:
+ 
+```json
+{
+  "customer_ref": "cus_8f3a",
+  "balance": 170,
+  "lifetime_earned": 170,
+  "tier": "Base",
+  "next_tier": { "name": "Silver", "points_needed": 30 },
+  "ways_to_earn": [ { "event": "preferences_reviewed", "points": 20, "available": true } ],
+  "simulated": true
+}
+```
+ 
+Ledger entry (append-only):
+ 
+```json
+{
+  "id": "led_77a1", "customer_ref": "cus_8f3a", "type": "earn",
+  "event": "consent_granted", "points": 50,
+  "idempotency_key": "cus_8f3a:consent_granted:personalised_offers",
+  "rules_version": "rwd_rules_v1", "at": "2026-11-20T18:41:00+01:00"
+}
+```
+ 
+Reward item and redemption:
+ 
+```json
+{ "id": "rwi_airtime_500", "name": "Airtime", "points_cost": 100, "kind": "airtime" }
+{ "id": "rdm_31c0", "customer_ref": "cus_8f3a", "reward_id": "rwi_airtime_500", "points": 100, "status": "fulfilled" }
+```
+ 
 ## 5. Endpoints
  
 Priority key: **M** must work in the demo, **S** should, **X** stub or slide only.
@@ -239,7 +307,7 @@ Returns the stored explanation, the categories of data used, and a link to conse
  
 #### `GET /customers/{ref}/consent` and `PUT /customers/{ref}/consent` (M)
  
-PUT validates the payload, appends to the ledger, updates the store, invalidates cached decisions for that customer, and emits `consent_changed`.
+PUT validates the payload, appends to the ledger, updates the store, invalidates cached decisions for that customer, and emits `consent_changed`. The first grant for a purpose also submits a `consent_granted` event to the rewards service (section 5.5), which awards points once.
  
 ### 5.3 Zenith console
  
@@ -306,7 +374,95 @@ Events:
 | `outcome_recorded` | A response or use check is recorded |
 | `consent_changed` | Consent is updated |
 | `policy_changed` | A policy is saved or approved |
+| `points_awarded` | An earn event is accepted and written to the ledger |
+| `points_redeemed` | A redemption is fulfilled |
+| `tier_changed` | A customer's tier changes |
  
+### 5.5 Rewards (points for customers who share data)
+ 
+The team's working term is "credit points". In the API and on screen, use **reward points** (or a Zenith brand name). "Credit" invites confusion with credit scoring and credit products, which carry review requirements.
+ 
+Reward points are a thank-you for customers who opt in. They are not a credit score.
+ 
+#### Design rules
+ 
+1. **Rewards never gate service.** A customer who does not consent is treated exactly the same for every service.
+2. **Consent and rewards are separate.** The consent endpoints work with or without rewards. Withdrawing consent writes to the ledger, stops further earning for that purpose, and does not claw back points already earned (`no_clawback_on_withdrawal`).
+3. **Points are not a credit signal.** The reward tier and balance never feed credit eligibility, product eligibility rules for credit products, or the uplift model. If compliance later approves a use, it is added deliberately.
+4. **Append-only and idempotent.** Every ledger entry has an idempotency key, so retries never double-award.
+5. **Anti-gaming.** One-time awards are keyed to customer and purpose, so toggling consent off and on never re-awards. A 30-day points cap and expiry apply.
+6. **Quiet notifications.** Reward notifications go to the app inbox by default, with their own cap, separate from the product-message cap. Compliance classifies them as service or promotional before any SMS is used.
+7. **Transparent consent screen.** It shows the reward, says that consent is optional, and says that withdrawing never removes points already earned. These are design choices for compliance to approve.
+#### Customer endpoints
+ 
+##### `GET /customers/{ref}/rewards` (M)
+ 
+Returns the reward account, available ways to earn, and the redeemable catalogue.
+ 
+Internal steps: read the ledger and compute balance, tier, and soon-to-expire points. Work out which earn actions are still available (one-time flags, caps). No profile or transaction data is read.
+ 
+##### `GET /customers/{ref}/rewards/history` (S)
+ 
+Paginated ledger entries for the customer, newest first.
+ 
+##### `POST /customers/{ref}/rewards/redeem` (M)
+ 
+```json
+{ "reward_id": "rwi_airtime_500" }
+```
+ 
+Requires an `Idempotency-Key` header. Internal steps:
+ 
+1. Validate the reward exists and has stock (`REWARD_OUT_OF_STOCK`).
+2. Check the balance (`INSUFFICIENT_POINTS`).
+3. Write a spend entry to the ledger.
+4. Call the `RewardsFulfilment` adapter. If it fails, write a reversal entry and return an error.
+5. Recompute the tier and emit `points_redeemed`.
+##### `GET /rewards/catalogue` (S)
+ 
+Rewards available for redemption, with point costs. Simulated items only in the demo (for example airtime, a fee waiver, a partner voucher).
+ 
+#### Internal event endpoint
+ 
+##### `POST /rewards/events` (M, system role only)
+ 
+Other services submit earn events here: the consent service (`consent_granted`), the feedback handler (`offer_feedback`), the outcome tracker (`product_use_milestone`).
+ 
+```json
+{ "customer_ref": "cus_8f3a", "event": "consent_granted", "purpose": "personalised_offers", "as_of": "2026-11-20T18:41:00+01:00" }
+```
+ 
+Internal steps:
+ 
+1. Check the event type is in the active rules (`REWARD_INELIGIBLE`).
+2. Build the idempotency key and return the existing award if present (`REWARD_DUPLICATE`).
+3. For events tied to data use, check consent on file (`REWARD_NO_CONSENT`).
+4. Apply per-event and 30-day caps (`REWARD_CAP_REACHED`).
+5. Write the ledger entry.
+6. Recompute the tier. Emit `points_awarded` and, if the tier changed, `tier_changed`.
+7. Queue an in-app notification within the reward notification cap.
+#### Console endpoints
+ 
+##### `GET /rewards/rules`, `PUT /rewards/rules`, `POST /rewards/rules/{version}/approve` (S)
+ 
+Versioned like policies. PUT saves a draft. Only `compliance` can approve.
+ 
+##### `POST /rewards/rules/simulate` (S)
+ 
+Projects points issued, redemption cost, and consent take-up over the synthetic population. Take-up behaviour is a planted assumption in the simulator and the response says so.
+ 
+##### `GET /metrics/rewards` (S)
+ 
+Consent rate, points issued and redeemed, outstanding points liability (points times an assumed unit cost), opt-outs after an award, and tier distribution. Always includes `"simulated": true`.
+ 
+##### `POST /rewards/adjustments` (X)
+ 
+Manual correction by `compliance`, with a required reason. Appends an adjustment entry. Stub or slide only.
+ 
+#### Phone view additions
+ 
+- A **Rewards** screen showing balance, tier, ways to earn, and redeem.
+- A reward line on the consent screen: "Turn on personalised offers and earn 50 points. Optional. Turn it off any time and keep your points."
 ## 6. What `POST /decisions/evaluate` does
  
 1. **Load context** through the adapters: profile, holdings, consent, recent contact history.
@@ -328,6 +484,8 @@ Hard rules always win over the learned rule. The learned rule can only make the 
 - Promotional SMS is reported to be allowed only between 08:00 and 20:00 WAT, and the NCC Do Not Disturb registry applies. The SMS quiet-hours default above reflects that. Verify against NCC directives before the pitch.
 - Credit products always go to a person. Automated offers of credit can have real consequences for customers.
 - No real customer data. Customer references are keyed hashes.
+- Consent must be freely given, specific and informed. An incentive for consent raises a real question about whether it is freely given, which is why rewards never gate service, consent stays optional, and withdrawal is penalty-free. Zenith's legal and data protection teams must review this design before any pilot.
+- Reward points are not a credit score and must not be presented or used as one.
 ## 8. Experiment protocol
  
 Population: synthetic customers with planted ground-truth response groups (persuadable, sure thing, lost cause, sleeping dog), so the true effect of a message is known.
@@ -340,13 +498,21 @@ Population: synthetic customers with planted ground-truth response groups (persu
  
 Report, per strategy: messages per customer, opt-out rate, sustained adoption at 60 days, fatigue index (share of customers receiving more than the cap would allow), and for `matchpoint` the uplift recovery against the planted truth. Use 20 seeds and report median, minimum and maximum. State clearly that the data is synthetic: the numbers show the method works against known ground truth, not production performance.
  
+### Consent incentive experiment
+ 
+`POST /experiments/run` with `"scenario": "consent_incentive"` compares `no_reward` and `reward` on the same synthetic population and seed.
+ 
+Report: consent rate, share still consenting at 90 days, opt-outs after an award, points cost per consenting customer. The effect of rewards on consent is a planted assumption in the simulator, so the numbers show that the measurement works, not how real customers will behave. Say so on the slide.
+ 
+Run the three-strategy comparison above with `"rewards_enabled": false`, so points do not inflate the adoption measure.
+ 
 ## 9. Build order and ownership
  
 | Day | Backend (Olaiwon) | ML and UI (Ayomide) | Product (Abdulhaqeem) |
 |---|---|---|---|
-| 1 | Simulator, adapters, consent ledger, `evaluate` with hard rules only, `/stream` | Feature extraction, detector, matcher, phone view skeleton | Catalogue, personas, policy defaults, rule verification, copy templates |
-| 2 | Governor, experiments runner, outcome tracker, `respond` and `why` | Uplift model and attention budget, explainer and guardrail, console shell | Review each scenario daily, demo script, deck |
-| 3 | Policy simulate, console metrics, stability, one-click reset | Console polish, metrics screen, backup video | Rehearsals, Q and A preparation |
+| 1 | Simulator, adapters, consent ledger, `evaluate` with hard rules only, `/stream`, points ledger and earn on consent | Feature extraction, detector, matcher, phone view skeleton, consent screen with reward line | Catalogue, personas, policy defaults, rule verification, copy templates, reward catalogue and illustrative earn values |
+| 2 | Governor, experiments runner, outcome tracker, `respond` and `why`, redeem, tiers, expiry | Uplift model and attention budget, explainer and guardrail, console shell, Rewards screen | Review each scenario daily, demo script, deck, consent and rewards wording, compliance questions |
+| 3 | Policy simulate, rewards simulate, console metrics, stability, one-click reset | Console polish, rewards tab, `consent_incentive` experiment, backup video | Rehearsals, Q and A preparation |
  
 Definition of done for the demo:
  
@@ -356,10 +522,17 @@ Definition of done for the demo:
 - The silence feed shows suppressed messages with reasons.
 - `POST /experiments/run` produces the three-strategy comparison.
 - Every number in the console is labelled simulated.
+- Granting consent for the first time awards points once, and toggling consent off and on does not award again.
+- Redeeming points writes to the ledger and updates the balance.
+- Withdrawing consent stops earning and keeps points already earned.
+- The console shows consent rate, points issued, and points redeemed, labelled simulated.
 ## 10. Open items to verify
  
 - NCC promotional SMS window and Do Not Disturb handling, from the directive itself.
 - Whether in-app and WhatsApp messages need separate consent wording under Zenith's policy.
 - Real Zenith product names, eligibility rules, and which products count as credit.
 - Facilitator answers: hosted LLM allowed or local only, work after 4 PM, pre-written code and downloaded models.
- 
+- Legal view on incentivised consent under Nigerian data protection rules.
+- Whether points create an accounting liability for Zenith, and how Zenith would value them.
+- Whether reward notifications count as service or promotional messages, and whether fee-waiver rewards are allowed under CBN rules.
+- The final name for the points scheme. Avoid anything that sounds like a credit score.
