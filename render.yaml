@@ -1,0 +1,39 @@
+# Render Blueprint: deploys both apps from this monorepo.
+# Render dashboard -> New -> Blueprint -> pick this repo. Each service only
+# redeploys when files under its buildFilter paths change.
+services:
+  - type: web
+    name: matchpoint-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    healthCheckPath: /api/v1/health
+    buildFilter:
+      paths:
+        - apps/api/**
+    envVars:
+      - key: ENV
+        value: production
+      # Set to the web URL once it exists, e.g. https://matchpoint-web.onrender.com
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: web
+    name: matchpoint-web
+    runtime: static
+    buildCommand: corepack enable pnpm && pnpm install --frozen-lockfile && pnpm build:web
+    staticPublishPath: ./apps/web/dist
+    buildFilter:
+      paths:
+        - apps/web/**
+        - pnpm-lock.yaml
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Set to the API URL, e.g. https://matchpoint-api.onrender.com (baked in at build time)
+      - key: VITE_API_URL
+        sync: false
