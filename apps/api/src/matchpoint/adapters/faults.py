@@ -1,3 +1,9 @@
+# FAULT_EXPECTATIONS (hackathon demo):
+#   - ConsentStore error → get() returns no consent, evaluate returns silent.
+#     Nothing else is read. This is the one fault the demo shows.
+# Other faults (duplicate, out-of-order, delay) are modelled by the FaultInjector
+# below. Nothing in the demo wires it in yet.
+
 """Seeded fault injection for any connector or transport.
 
 Wrap a connector to test how services handle faults. Wrap a transport (which returns raw

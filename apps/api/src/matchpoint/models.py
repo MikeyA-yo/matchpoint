@@ -90,6 +90,10 @@ class Product(BaseModel):
     features: list[str] = []
     eligibility: dict[str, Any]
     version: int
+    # Pitch extras: short facts, where the uplift comes from, and the "compared to what" group.
+    key_facts: list[str] = []
+    gain_model: str | None = None
+    compare_group: str | None = None
 
 
 MessagePurpose = Literal["marketing", "service"]
