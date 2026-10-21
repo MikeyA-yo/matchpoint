@@ -31,11 +31,20 @@ class DecisionLog:
         return self._by_id.get(decision_id)
 
     def find(
-        self, customer_ref: str, as_of: datetime, mode: str
+        self, customer_ref: str, as_of: datetime, mode: str, epoch: int = 0
     ) -> Decision | None:
-        """The decision already made for this customer at this instant."""
+        """The decision already made for this customer at this instant.
+
+        The epoch is part of the key: planting a demo pattern bumps it, so the next
+        evaluation runs again instead of returning the decision from before the pattern.
+        Caps and gaps still read every epoch, because they count real contacts.
+        """
         for decision in self.for_customer(customer_ref):
-            if decision.as_of == as_of and decision.mode == mode:
+            if (
+                decision.as_of == as_of
+                and decision.mode == mode
+                and decision.epoch == epoch
+            ):
                 return decision
         return None
 

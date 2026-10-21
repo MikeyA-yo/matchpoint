@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from matchpoint.clock import Clock
+from matchpoint.events.bus import EventBus
 from matchpoint.ledger.decision_log import DecisionLog
 from matchpoint.models import Channel, Consent, Product, Profile, Txn
 from matchpoint.pipeline.detector import Signal
@@ -50,6 +51,12 @@ class Context:
     policy: Policy
     log: DecisionLog
     trace: TraceBuilder = field(default_factory=TraceBuilder)
+    # Bumped per customer when a demo pattern is planted, so a re-run is not the cached
+    # decision. Zero for an ordinary evaluation.
+    epoch: int = 0
+    # Where step 10 and the log append publish their events. None in tests and in code
+    # that only exercises the pipeline.
+    events: EventBus | None = None
 
     consent: Consent | None = None
     profile: Profile | None = None
@@ -81,10 +88,15 @@ class Context:
     def days_since_ignored(self, product_id: str) -> float | None:
         """Days since the customer ignored or declined this product.
 
-        The outcome tracker owns that signal and is not built yet, so the demo log has
-        nothing to report and the cooldown rule passes.
+        Read from the message store: not_now sets a cooldown timestamp that this reads
+        back.
         """
-        return None
+        last = self.adapters.message_store.ignored_at(self.customer_ref, product_id)
+        return (
+            None
+            if last is None
+            else (self.as_of - last).total_seconds() / 86_400
+        )
 
     def window_start(self, days: int = LOOKBACK_DAYS) -> datetime:
         return self.as_of - timedelta(days=days)

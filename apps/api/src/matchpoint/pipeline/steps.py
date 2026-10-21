@@ -8,8 +8,9 @@ write the message, check it and deliver it.
 
 from __future__ import annotations
 
-from matchpoint.models import OutboundMessage
 from matchpoint.customer.message_log import StoredMessage
+from matchpoint.events.schemas import stream_event
+from matchpoint.models import OutboundMessage
 from matchpoint.pipeline import rules
 from matchpoint.pipeline.context import Context, ScoredProduct
 from matchpoint.pipeline.detector import detect_signals
@@ -347,7 +348,7 @@ def deliver(ctx: Context) -> StepResult:
             outcome="hold",
         )
     existing = ctx.log.get(
-        decision_id(ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode)
+        decision_id(ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode, ctx.epoch)
     )
     if existing is not None:
         return StepResult(
@@ -372,7 +373,7 @@ def deliver(ctx: Context) -> StepResult:
         )
 
     msg = OutboundMessage(
-        id=message_id(ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode),
+        id=message_id(ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode, ctx.epoch),
         customer_ref=ctx.customer_ref,
         channel=ctx.channel,
         title=ctx.message.title,
@@ -383,6 +384,32 @@ def deliver(ctx: Context) -> StepResult:
     )
     receipt = ctx.adapters.channels.send(msg, purpose="marketing")
     if receipt.status in ("accepted", "queued"):
+        stored = StoredMessage(
+            id=msg.id,
+            customer_ref=msg.customer_ref,
+            channel=msg.channel,
+            title=msg.title,
+            body=msg.body,
+            why=msg.why,
+            product_id=msg.product_id,
+            sent_at=receipt.at,
+        )
+        ctx.adapters.message_store.append(stored)
+        if ctx.events is not None:
+            ctx.events.publish(
+                stream_event(
+                    "message_delivered",
+                    at=receipt.at.isoformat(),
+                    customer_ref=msg.customer_ref,
+                    message_id=msg.id,
+                    decision_id=decision_id(
+                        ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode, ctx.epoch
+                    ),
+                    product_id=ctx.product.id,
+                    channel=msg.channel,
+                    status=receipt.status,
+                )
+            )
         return StepResult(
             10, "deliver", "OK", f"{ctx.channel}: {receipt.status}"
         )

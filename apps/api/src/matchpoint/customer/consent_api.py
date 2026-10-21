@@ -11,11 +11,14 @@ built).
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from matchpoint.clock import WAT
 from matchpoint.customer.message_log import message_store
+from matchpoint.models import Consent
 from matchpoint.wiring import get_runtime
 
 log = logging.getLogger("matchpoint.consent")
@@ -26,13 +29,6 @@ router = APIRouter(tags=["customer"])
 class ConsentRequest(BaseModel):
     personalised_offers: bool
     channels: dict[str, bool] = Field(default_factory=dict)
-
-
-class ConsentResponse(BaseModel):
-    customer_ref: str
-    personalised_offers: bool
-    channels: dict[str, bool]
-    updated_at: str
 
 
 @router.get("/customers/{ref}/consent")
@@ -56,10 +52,6 @@ def put_consent(ref: str, request: ConsentRequest):
     for c in ("app", "whatsapp", "sms", "ussd"):
         channels[c] = bool(request.channels.get(c, False))
 
-    from matchpoint.models import Consent
-    from matchpoint.clock import WAT
-    from datetime import datetime
-
     new_consent = Consent(
         customer_ref=ref,
         personalised_offers=request.personalised_offers,
@@ -70,10 +62,7 @@ def put_consent(ref: str, request: ConsentRequest):
     runtime.adapters.consent.set(ref, new_consent, purpose="marketing")
 
     # Reward event when personalised_offers is granted for the first time
-    if (
-        request.personalised_offers
-        and not current.personalised_offers
-    ):
+    if request.personalised_offers and not current.personalised_offers:
         log.info(
             "consent_granted event for %s: personalised_offers first granted",
             ref,

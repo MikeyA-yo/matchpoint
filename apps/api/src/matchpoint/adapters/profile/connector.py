@@ -13,6 +13,7 @@ from matchpoint.models import Profile, RefExists
 
 class ProfileTransport(Protocol):
     def read(self, customer_ref: str) -> Profile | None: ...
+    def write(self, customer_ref: str, profile: Profile) -> None: ...
 
 
 class CustomerProfileImpl:
@@ -31,3 +32,11 @@ class CustomerProfileImpl:
         except CustomerNotFound:
             found = None
         return RefExists(customer_ref=customer_ref, exists=found is not None)
+
+    def update_holdings(self, customer_ref: str, holdings: list[str]) -> Profile:
+        found = self._transport.read(customer_ref)
+        if found is None:
+            raise CustomerNotFound("CustomerProfile", f"unknown {customer_ref}")
+        updated = found.model_copy(update={"holdings": holdings})
+        self._transport.write(customer_ref, updated)
+        return updated

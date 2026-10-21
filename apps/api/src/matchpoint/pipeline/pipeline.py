@@ -7,6 +7,7 @@ proceed. The Decision is written to the append-only log exactly once per derived
 from __future__ import annotations
 
 from matchpoint.adapters.errors import CustomerNotFound
+from matchpoint.events.schemas import stream_event
 from matchpoint.pipeline.context import Context
 from matchpoint.pipeline.ids import decision_id
 from matchpoint.pipeline.schemas import REASON_CODES, Decision
@@ -40,7 +41,7 @@ STEPS = (
 
 def evaluate(ctx: Context) -> Decision:
     ensure_customer(ctx)
-    existing = ctx.log.find(ctx.customer_ref, ctx.as_of, ctx.mode)
+    existing = ctx.log.find(ctx.customer_ref, ctx.as_of, ctx.mode, ctx.epoch)
     if existing is not None:
         return existing
     result = StepResult(0, "start")
@@ -72,7 +73,7 @@ def _finish(ctx: Context, result: StepResult) -> Decision:
     reasons = [reason, *(extra for extra in ctx.reasons if extra != reason)]
     product_id = ctx.product.id if ctx.product else None
     decision = Decision(
-        id=decision_id(ctx.customer_ref, product_id, ctx.as_of, ctx.mode),
+        id=decision_id(ctx.customer_ref, product_id, ctx.as_of, ctx.mode, ctx.epoch),
         customer_ref=ctx.customer_ref,
         as_of=ctx.as_of,
         mode=ctx.mode,
@@ -83,5 +84,27 @@ def _finish(ctx: Context, result: StepResult) -> Decision:
         scheduled_for=ctx.scheduled_for,
         trace=ctx.trace.model(ctx.policy.id),
         message=ctx.message,
+        epoch=ctx.epoch,
     )
-    return ctx.log.append(decision)
+    return _record(ctx, decision)
+
+
+def _record(ctx: Context, decision: Decision) -> Decision:
+    """Write the decision once and tell the stream. A repeated ID is not a new event."""
+    is_new = ctx.log.get(decision.id) is None
+    stored = ctx.log.append(decision)
+    if is_new and ctx.events is not None:
+        ctx.events.publish(
+            stream_event(
+                "decision_created",
+                at=decision.as_of.isoformat(),
+                customer_ref=decision.customer_ref,
+                decision_id=decision.id,
+                outcome=decision.outcome,
+                product_id=decision.product_id,
+                channel=decision.channel,
+                reasons=list(decision.reasons),
+                mode=decision.mode,
+            )
+        )
+    return stored

@@ -59,8 +59,7 @@ def respond(message_id: str, request: RespondRequest):
 
     if request.action == "stop_offers":
         consent = runtime.adapters.consent.get(msg.customer_ref, purpose="marketing")
-        all_channels: dict[Channel, bool] = {c: False for c in Channel.__args__ if isinstance(Channel.__args__, tuple)}  # type: ignore[attr-defined]
-        channels = {c: False for c in ("app", "whatsapp", "sms", "ussd")}
+        channels: dict = {c: False for c in Channel.__args__}
         new_consent = consent.model_copy(
             update={
                 "personalised_offers": False,

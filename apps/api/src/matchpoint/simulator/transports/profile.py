@@ -20,3 +20,6 @@ class SimProfileTransport:
 
     def read(self, customer_ref: str) -> Profile | None:
         return self._by_ref.get(customer_ref)
+
+    def write(self, customer_ref: str, profile: Profile) -> None:
+        self._by_ref[customer_ref] = profile

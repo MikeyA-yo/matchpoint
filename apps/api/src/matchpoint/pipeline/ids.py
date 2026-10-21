@@ -11,14 +11,30 @@ def _derive(prefix: str, material: str) -> str:
 
 
 def decision_id(
-    customer_ref: str, product_id: str | None, as_of: datetime, mode: str
+    customer_ref: str,
+    product_id: str | None,
+    as_of: datetime,
+    mode: str,
+    epoch: int = 0,
 ) -> str:
-    material = f"{customer_ref}|{product_id or 'none'}|{as_of.isoformat()}|{mode}"
+    """Stable for one (customer, product, instant, mode, epoch).
+
+    The epoch changes when the demo plants a pattern for the customer, so the next
+    evaluation is a new decision instead of the cached one, while a plain retry inside
+    the same epoch still returns the same record.
+    """
+    material = f"{customer_ref}|{product_id or 'none'}|{as_of.isoformat()}|{mode}|{epoch}"
     return _derive("dec", material)
 
 
 def message_id(
-    customer_ref: str, product_id: str | None, as_of: datetime, mode: str
+    customer_ref: str,
+    product_id: str | None,
+    as_of: datetime,
+    mode: str,
+    epoch: int = 0,
 ) -> str:
-    material = f"msg|{customer_ref}|{product_id or 'none'}|{as_of.isoformat()}|{mode}"
+    material = (
+        f"msg|{customer_ref}|{product_id or 'none'}|{as_of.isoformat()}|{mode}|{epoch}"
+    )
     return _derive("msg", material)

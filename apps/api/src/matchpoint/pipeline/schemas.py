@@ -115,4 +115,6 @@ class Decision(BaseModel):
     scheduled_for: datetime | None = None
     trace: Trace
     message: Message | None = None
+    # Which planted-pattern generation produced this decision. 0 is an ordinary run.
+    epoch: int = 0
     simulated: bool = True
