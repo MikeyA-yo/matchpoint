@@ -36,9 +36,7 @@ export function Experiments() {
 
   return (
     <>
-      <ConsoleHead title="Experiments">
-        Three strategies on the same synthetic customers with the same seed. Planted ground truth means the true effect is known.
-      </ConsoleHead>
+      <ConsoleHead title="Experiments" />
       <div className="stack">
         <Card title="Run an experiment" endpoint="POST /experiments/run">
           <div className="stack">

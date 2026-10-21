@@ -14,19 +14,19 @@ function DecisionTable({ items, onOpen }: { items: Decision[]; onOpen: (id: stri
   const productName = useProductNames();
   return (
     <div className="table-wrap">
-      <table className="table">
+      <table className="table table-cards">
         <thead>
           <tr><th>As of</th><th>Customer</th><th>Outcome</th><th>Reasons</th><th>Product</th><th>Channel</th></tr>
         </thead>
         <tbody>
           {items.map((d) => (
             <tr key={d.id} className="clickable" onClick={() => onOpen(d.id)}>
-              <td className="small">{fmtDateTime(d.as_of)}</td>
-              <td><code>{d.customer_ref}</code></td>
-              <td><OutcomeBadge outcome={d.outcome} /></td>
-              <td><div className="row">{d.reasons.map((r) => <ReasonChip key={r} code={r} />)}</div></td>
-              <td className="small">{productName(d.product_id) || "—"}</td>
-              <td className="small">{d.channel ? CHANNEL_LABEL[d.channel] : "—"}</td>
+              <td data-label="As of" className="small">{fmtDateTime(d.as_of)}</td>
+              <td data-label="Customer"><code>{d.customer_ref}</code></td>
+              <td data-label="Outcome"><OutcomeBadge outcome={d.outcome} /></td>
+              <td data-label="Reasons"><div className="row">{d.reasons.map((r) => <ReasonChip key={r} code={r} />)}</div></td>
+              <td data-label="Product" className="small">{productName(d.product_id) || "—"}</td>
+              <td data-label="Channel" className="small">{d.channel ? CHANNEL_LABEL[d.channel] : "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -146,16 +146,16 @@ export function ReviewQueue() {
         {done.length > 0 && (
           <Card title="Reviewed" bodyClass="">
             <div className="table-wrap">
-              <table className="table">
+              <table className="table table-cards">
                 <thead><tr><th>Customer</th><th>Product</th><th>Result</th><th>By</th><th>Note</th></tr></thead>
                 <tbody>
                   {done.map((d) => (
                     <tr key={d.id}>
-                      <td><code>{d.customer_ref}</code></td>
-                      <td className="small">{productName(d.product_id)}</td>
-                      <td><Badge tone={d.review!.action === "approved" ? "green" : "red"}>{d.review!.action === "approved" ? "Approved" : "Declined"}</Badge></td>
-                      <td className="small muted">{humanize(d.review!.by)}</td>
-                      <td className="small muted">{d.review!.note || "—"}</td>
+                      <td data-label="Customer"><code>{d.customer_ref}</code></td>
+                      <td data-label="Product" className="small">{productName(d.product_id)}</td>
+                      <td data-label="Result"><Badge tone={d.review!.action === "approved" ? "green" : "red"}>{d.review!.action === "approved" ? "Approved" : "Declined"}</Badge></td>
+                      <td data-label="By" className="small muted">{humanize(d.review!.by)}</td>
+                      <td data-label="Note" className="small muted">{d.review!.note || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

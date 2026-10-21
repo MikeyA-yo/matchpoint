@@ -17,6 +17,10 @@
 
   --amber: #f5b83d;
   --amber-soft: rgba(245, 184, 61, 0.12);
+  /* Brand red: identity accents only. Status and error red stays --red. */
+  --brand: #e3262f;
+  --brand-soft: rgba(227, 38, 47, 0.14);
+
   --red: #f26d6d;
   --red-soft: rgba(242, 109, 109, 0.12);
   --blue: #7cb6ff;
@@ -54,6 +58,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 /* ---------- layout ---------- */
 
 .topbar {
+  box-shadow: inset 0 2px 0 var(--brand);
   position: sticky; top: 0; z-index: 20;
   display: flex; align-items: center; gap: 20px;
   padding: 12px 24px;
@@ -63,11 +68,11 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 }
 .brand { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; letter-spacing: 0.04em; color: var(--text); }
 .brand:hover { text-decoration: none; }
-.brand-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px var(--green); }
+.brand-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); box-shadow: 0 0 12px var(--brand); }
 .nav { display: flex; gap: 4px; }
 .nav a { color: var(--muted); padding: 6px 10px; border-radius: var(--radius-sm); }
 .nav a:hover { color: var(--text); text-decoration: none; background: var(--surface-2); }
-.nav a.active { color: var(--text); background: var(--surface-2); }
+.nav a.active { color: var(--text); background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--brand); }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 
 .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px; }
@@ -183,7 +188,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .tab { border: 0; background: transparent; color: var(--muted); padding: 10px 14px; font: 600 13px var(--font); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .tab:hover { color: var(--text); }
-.tab.active { color: var(--text); border-bottom-color: var(--green); }
+.tab.active { color: var(--text); border-bottom-color: var(--brand); }
 
 .json { margin: 0; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: auto; max-height: 360px; font-family: var(--mono); font-size: 12px; color: #cfe9d6; }
 
@@ -220,6 +225,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .home { max-width: 760px; padding-top: 72px; }
 .home-head { margin-bottom: 28px; }
 .home-head h1 { font-size: 36px; letter-spacing: 0.02em; margin: 10px 0 4px; }
+.home-head h1::after { content: ""; display: block; width: 44px; height: 3px; margin-top: 10px; border-radius: 2px; background: var(--brand); }
 .door h3 { margin-bottom: 2px; }
 .home-foot { margin-top: 24px; }
 
@@ -283,7 +289,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .phone-tabs .ico { font-size: 16px; line-height: 1; }
 
 .p-card { background: #fff; border: 1px solid var(--p-border); border-radius: 14px; padding: 12px; }
-.p-balance { background: #0b0d0b; color: #fff; border-radius: 16px; padding: 16px; }
+.p-balance { background: #0b0d0b; color: #fff; border-radius: 16px; padding: 16px; box-shadow: inset 3px 0 0 var(--brand); }
 .p-balance .amt { font-family: var(--font-display); font-size: 26px; font-weight: 600; margin-top: 4px; }
 .p-balance .lbl { color: #9fb3a5; font-size: 12px; }
 .p-msg { display: block; width: 100%; text-align: left; font: inherit; color: inherit; background: #fff; border: 1px solid var(--p-border); border-radius: 14px; padding: 12px; cursor: pointer; }
@@ -340,7 +346,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .sidebar-group { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em; padding: 14px 10px 6px; }
 .sidebar a { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius-sm); color: var(--muted); font-weight: 500; }
 .sidebar a:hover { color: var(--text); background: var(--surface-2); text-decoration: none; }
-.sidebar a.active { color: var(--text); background: var(--surface-2); box-shadow: inset 2px 0 0 var(--green); }
+.sidebar a.active { color: var(--text); background: var(--surface-2); box-shadow: inset 2px 0 0 var(--brand); }
 .console-main { padding: 28px 32px 64px; min-width: 0; }
 .role-picker { display: flex; align-items: center; gap: 8px; }
 
@@ -359,6 +365,8 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 
 /* ---------- responsive ---------- */
 
+.show-sm { display: none; }
+
 @media (max-width: 1000px) {
   .customer-layout { grid-template-columns: 1fr; }
   .phone-col { position: static; }
@@ -367,18 +375,67 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 }
 
 @media (max-width: 760px) {
-  .topbar { padding: 10px 16px; gap: 12px; flex-wrap: wrap; }
-  .nav { order: 3; width: 100%; overflow-x: auto; }
-  .container { padding: 24px 16px 48px; }
-  .sandbox-bar { padding: 10px 16px; }
+  .hide-sm { display: none; }
+  .show-sm { display: inline; }
+
+  /* Two rows: brand and account controls, then the section tabs */
+  .topbar { position: static; padding: 10px 16px 0; gap: 10px; flex-wrap: wrap; }
+  .topbar-right { gap: 8px; }
+  .nav { order: 3; width: calc(100% + 32px); margin: 0 -16px; padding: 0 12px 8px; overflow-x: auto; }
+  .container { padding: 20px 16px 48px; }
+  .page-head { margin-bottom: 16px; }
+
+  .sandbox-bar { padding: 10px 16px; gap: 8px; }
+  .sandbox-result { width: 100%; }
+
   .kv { grid-template-columns: 120px 1fr; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
-  .console { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); display: flex; gap: 4px; overflow-x: auto; padding: 10px 16px; }
-  .sidebar-group { display: none; }
-  .sidebar a { white-space: nowrap; }
-  .console-main { padding: 20px 16px 48px; }
-  .phone { height: 640px; }
+  .quiet-grid { grid-template-columns: 1fr; }
+  .card-head { padding: 12px 14px; }
+  .card-body { padding: 14px; }
+
+  /* Console: the sidebar becomes a scrolling strip of sections */
+  .console { grid-template-columns: 1fr; min-height: 0; }
+  .sidebar { position: sticky; top: 0; z-index: 10; height: auto; display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--border); background: var(--bg); scrollbar-width: none; }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .sidebar-group, .sidebar-status { display: none; }
+  .sidebar a { white-space: nowrap; flex: none; padding: 6px 10px; }
+  .sidebar a.active { box-shadow: inset 0 -2px 0 var(--brand); }
+  .console-main { padding: 16px 16px 48px; }
+
+  .filter-bar { padding: 12px 14px; }
+  .filter-bar .select, .filter-bar .input { flex: 1 1 140px; max-width: none; width: auto; }
+
+  /* Wide tables become one card per row */
+  .table-cards thead { display: none; }
+  .table-cards, .table-cards tbody, .table-cards tr { display: block; width: 100%; }
+  .table-cards tr { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .table-cards tr:last-child { border-bottom: 0; }
+  .table-cards td { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 4px 0; border: 0; text-align: right; }
+  .table-cards td::before { content: attr(data-label); flex: none; color: var(--muted); font-size: 12px; text-align: left; }
+  .table-cards td[data-label=""] { justify-content: flex-end; }
+  .table-cards td[data-label=""]::before { content: none; }
+  .table-cards td .row { justify-content: flex-end; }
+
+  .queue-main { align-items: flex-start; }
+  .drawer-body { padding: 14px; }
   .rule { grid-template-columns: 18px 1fr; }
   .rule > :last-child { grid-column: 2; }
+}
+
+@media (max-width: 400px) {
+  .hide-xs { display: none; }
+  .grid-4 { grid-template-columns: 1fr; }
+  .kv { grid-template-columns: 1fr; gap: 2px 0; }
+  .kv dd { margin-bottom: 8px; }
+}
+
+/* On a real phone, show the app screen edge to edge instead of a phone inside a phone */
+@media (max-width: 520px) {
+  .phone { width: 100%; height: auto; padding: 0; border: 0; border-radius: 18px; background: transparent; box-shadow: none; }
+  .phone-screen { height: auto; min-height: 72vh; border-radius: 18px; overflow: visible; }
+  .phone-notch, .phone-status { display: none; }
+  .phone-head { padding-top: 16px; }
+  .phone-body { overflow: visible; }
+  .phone-tabs { position: sticky; bottom: 0; border-radius: 0 0 18px 18px; box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.06); }
 }

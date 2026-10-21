@@ -523,7 +523,7 @@ data: {"at":"2026-12-03T09:02:00+01:00","customer_ref":"cus_…","decision_id":"
 | `points_redeemed` | A redemption is fulfilled | `at`, `customer_ref`, `reward_id`, `points`, `balance` |
 | `tier_changed` | A balance crosses a tier threshold | `at`, `customer_ref`, `from_tier`, `to_tier` |
 
-The frontend subscribes to only the first five types.
+The web app handles all eight types.
 
 ## 6. What `POST /decisions/evaluate` does
 
@@ -548,22 +548,28 @@ For-you does not run this pipeline end to end: it loads consent, profile, transa
 
 ## 7. Web app integration status
 
-The web app defaults to its in-browser mock backend. The header pill (or `VITE_API_MOCK=false`) switches a browser to this API. In live mode the following contract gaps exist:
+The web app defaults to its in-browser mock backend. Turning on Developer view and clicking the Mock API pill (or setting `VITE_API_MOCK=false`) switches a browser to this API. In live mode every call goes to the API first and falls back to the mock only when the API has no such route; the console sidebar (Developer view) lists which endpoints were served live.
 
-| Area | Web expects | API today |
+| Area | API today | Web app in live mode |
 |---|---|---|
-| Auth | `POST /auth/signup`, `/auth/signin`, `GET /customers/{ref}` | Not implemented |
-| Decisions | list, batch, approve/reject | Only `POST /decisions/evaluate` |
-| Inbox | `Page<Message>` with `items`, `decision_id`, `why`, `delivered_at`, statuses `delivered/scheduled/...` | `{ messages: [...] }` with `sent_at`, `status: sent/opened/...`, no `why` or `decision_id` |
-| Why | `{ why, data_categories }` | `{ reason, data_used }` |
-| Respond | `{ message, consent? }` | `{ status }` or a consent object |
-| Consent | includes `source` | `source` omitted |
-| Metrics | `GET /metrics/by-product` | `GET /metrics/by-channel` |
-| Console | policies, products, campaigns, audit, experiments, model | Not implemented |
-| Rewards UI | Rewards screen and consent reward line | No rewards code in `apps/web/src` |
-| Stream | five event types | eight emitted; the extra three are ignored by the web client |
+| Simulator, evaluate, consent, for-you, rewards, metrics, stream | Implemented | Uses the API |
+| Inbox | `{ messages }`, `sent_at`, `status: sent/...` | Adapted client-side to `Page<Message>` (`apps/web/src/lib/api.ts`, `adapt`) |
+| Why | `{ reason, data_used }` | Adapted to `{ why, data_categories }` |
+| Respond | `{ status }` or a consent object, no stream event | Accepted as is; the phone refreshes itself after each action |
+| For-you `why` | Names raw signals (`salary_regular`) | Reworded on the phone; the API should return plain text |
+| Consent `email` | Always stored `false` | Email toggle removed from the phone and sign-up |
+| Auth, `GET /customers/{ref}` | Not implemented | Mock. Sign-in lists the seven demo customers with their API refs. Customers created by sign-up exist only in the mock, so all their calls go to the mock |
+| `GET /decisions`, review approve/reject | Not implemented | Mock. Live `evaluate` results are copied into the mock store so the decision log, review queue and message log show them. Approving there does not reach the API, so an approved credit offer never lands in the live inbox |
+| `GET /metrics/by-product` | Not implemented | No longer used; the overview shows by-channel |
+| Policies, products, campaigns, audit, experiments, model | Not implemented | Mock |
+| Stream | Eight event types | All eight handled, including `points_awarded`, `tier_changed`, `points_redeemed` |
 
-The mock in `apps/web/src/lib/mock.ts` remains the reference for the intended console contract until those routes exist.
+Asks for the API, in demo order:
+
+1. `POST /decisions/{id}/approve` and `/reject`, so the credit-review story works live.
+2. `GET /decisions` (filters `customer_ref`, `outcome`), so the console stops relying on copied decisions.
+3. Invalidate cached decisions when consent changes. Today, after Stop offers, re-running at the same `as_of` returns the earlier `send`.
+4. Plain-language `why` on for-you items.
 
 ## 8. Not built (design backlog)
 
@@ -589,7 +595,6 @@ These appear in earlier drafts and in the frontend contract, but no route serves
 | Clock control | No `/sim/advance`; callers can pass `as_of` to `evaluate`, but quiet-hours scheduled sends never fire automatically |
 | Outcome tracker | 30/60-day use checks and `product_use_milestone` emission |
 | Consent events | `consent_changed` and `policy_changed` are defined but never published |
-| Web rewards screen | Balance, tier, earn, redeem UI |
 
 The experiment protocol and build order from v0.2 remain in git history.
 
@@ -599,8 +604,8 @@ The experiment protocol and build order from v0.2 remain in git history.
 |---|---|
 | `POST /sim/start` and `/sim/reset` work and repeat with the same seed | Yes |
 | `evaluate` returns send, hold, silent, and review with reasons and a trace | Yes |
-| Phone view works end to end | Only against the mock; auth and profile routes are missing, and inbox/why/respond shapes differ |
-| Silence feed in the console | No; no decision-list endpoint |
+| Phone view works end to end | Yes for the seven demo customers (inbox, Why, responses, For you, rewards); sign-in and profile still come from the web mock |
+| Silence feed in the console | Partly: shows live decisions copied by the web app; no decision-list endpoint |
 | Three-strategy experiment | No |
 | Every console number labelled simulated | Metrics yes; other console pages are mock-only |
 | First consent grant awards points once; toggling does not re-award | Yes |

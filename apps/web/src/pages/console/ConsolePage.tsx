@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet, useLocation } from "react-router";
 import { Badge } from "../../components/ui";
 import { onServedChange, servedEndpoints } from "../../lib/api";
 import { ApiProvider, useApi, useTechnical } from "../../lib/context";
@@ -46,6 +46,11 @@ const SECTIONS: { group: string; links: [to: string, label: string][] }[] = [
 
 export function ConsolePage() {
   const [role, setRole] = useState<Role>(() => load<Role>(KEYS.role, "campaign_manager"));
+  const { pathname } = useLocation();
+  // On phones the sidebar is a scrolling strip; keep the current page in view
+  useEffect(() => {
+    document.querySelector(".sidebar a.active")?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [pathname]);
   const changeRole = (r: Role) => {
     save(KEYS.role, r);
     setRole(r);
@@ -65,8 +70,10 @@ export function ConsolePage() {
               ))}
             </div>
           ))}
-          <div className="sidebar-group">Status</div>
-          <Health />
+          <div className="sidebar-status">
+            <div className="sidebar-group">Status</div>
+            <Health />
+          </div>
         </aside>
         <div className="console-main">
           <div className="row-between" style={{ marginBottom: 20 }}>

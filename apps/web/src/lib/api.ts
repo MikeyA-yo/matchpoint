@@ -1,5 +1,6 @@
 import { ApiError } from "./errors";
 import { getMode } from "./mode";
+import { DEMO_CUSTOMERS } from "./personas";
 import { mockKnowsCustomer, mockRecordDecision, mockRequest, mockSubscribe } from "./mock";
 import { KEYS, load } from "./storage";
 import {
@@ -196,8 +197,18 @@ function mirror(path: string, result: unknown) {
   if (path === "/decisions/batch") (result as BatchResult).decisions.forEach(mockRecordDecision);
 }
 
+// The API only knows its seven demo customers. For anyone else (a sign-up made in the
+// mock) it answers consent and rewards with empty defaults instead of 404, so route those
+// customers to the mock until /auth/signup exists.
+const API_CUSTOMERS = new Set(DEMO_CUSTOMERS.map((c) => c.ref));
+
 async function liveWhereReady<T>(path: string, options: RequestOptions): Promise<T> {
   const method = options.method ?? "GET";
+  const ref = customerRefOf(path, options.body);
+  if (ref !== undefined && !API_CUSTOMERS.has(ref) && mockKnowsCustomer(ref)) {
+    markServed(method, path, "mock");
+    return mockRequest<T>(path, options);
+  }
   try {
     const result = adapt(path, await liveRequest<T>(path, options)) as T;
     markServed(method, path, "live");
@@ -205,10 +216,7 @@ async function liveWhereReady<T>(path: string, options: RequestOptions): Promise
     return result;
   } catch (e) {
     if (!(e instanceof ApiError)) throw e;
-    const ref = customerRefOf(path, options.body);
-    // A customer created by the mock's sign-up is unknown to the API until /auth/signup exists
-    const mockOnlyCustomer = e.code === "CUSTOMER_NOT_FOUND" && ref !== undefined && mockKnowsCustomer(ref);
-    if (!isMissingRoute(e) && !mockOnlyCustomer) {
+    if (!isMissingRoute(e)) {
       markServed(method, path, "live");
       throw e;
     }

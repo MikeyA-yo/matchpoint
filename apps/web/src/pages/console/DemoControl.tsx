@@ -160,15 +160,15 @@ export function Audit() {
           <Empty title="No entries" />
         ) : (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table table-cards">
               <thead><tr><th>When</th><th>Kind</th><th>Ref</th><th>Summary</th></tr></thead>
               <tbody>
                 {log.data.items.map((e, i) => (
                   <tr key={`${e.ref}-${i}`}>
-                    <td className="small">{fmtDateTime(e.at)}</td>
-                    <td><Badge tone={e.kind === "consent" ? "amber" : e.kind === "policy" ? "blue" : "grey"}>{e.kind}</Badge></td>
-                    <td><code>{e.ref}</code></td>
-                    <td className="small muted">{e.summary}</td>
+                    <td data-label="When" className="small">{fmtDateTime(e.at)}</td>
+                    <td data-label="Kind"><Badge tone={e.kind === "consent" ? "amber" : e.kind === "policy" ? "blue" : "grey"}>{e.kind}</Badge></td>
+                    <td data-label="Ref"><code>{e.ref}</code></td>
+                    <td data-label="Summary" className="small muted">{e.summary}</td>
                   </tr>
                 ))}
               </tbody>

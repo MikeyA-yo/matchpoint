@@ -37,20 +37,20 @@ export function Policies() {
             <ErrorNote error={approveState.error} />
           </div>
           <div className="table-wrap">
-            <table className="table">
+            <table className="table table-cards">
               <thead>
                 <tr><th>Version</th><th>Status</th><th>Created</th><th className="num">Max / 30 days</th><th className="num">Min benefit</th><th>Approved by</th><th /></tr>
               </thead>
               <tbody>
                 {list.data?.items.map((p) => (
                   <tr key={p.id}>
-                    <td><code>{p.id}</code></td>
-                    <td><Badge tone={p.status === "active" ? "green" : p.status === "draft" ? "amber" : "grey"}>{p.status}</Badge></td>
-                    <td className="small">{fmtDateTime(p.created_at)}</td>
-                    <td className="num">{p.max_messages_per_30d}</td>
-                    <td className="num">{p.min_uplift}</td>
-                    <td className="small">{p.approved_by ? humanize(p.approved_by) : "—"}</td>
-                    <td className="num">
+                    <td data-label="Version"><code>{p.id}</code></td>
+                    <td data-label="Status"><Badge tone={p.status === "active" ? "green" : p.status === "draft" ? "amber" : "grey"}>{p.status}</Badge></td>
+                    <td data-label="Created" className="small">{fmtDateTime(p.created_at)}</td>
+                    <td data-label="Max / 30 days" className="num">{p.max_messages_per_30d}</td>
+                    <td data-label="Min benefit" className="num">{p.min_uplift}</td>
+                    <td data-label="Approved by" className="small">{p.approved_by ? humanize(p.approved_by) : "—"}</td>
+                    <td data-label="" className="num">
                       {p.status === "draft" && (
                         <Button size="sm" variant="primary" loading={approveState.loading} onClick={async () => (await approve(p.id)) && list.reload()}>
                           Approve
@@ -111,7 +111,7 @@ function PolicyEditor({ base, onSaved }: { base: Policy; onSaved: () => void }) 
         </Field>
         <div>
           <div className="label" style={{ marginBottom: 6 }}>Quiet hours (WAT)</div>
-          <div className="grid-4">
+          <div className="grid-4 quiet-grid">
             {CHANNELS.map((ch) => {
               const w = draft.quiet_hours[ch];
               const setW = (next?: { start: string; end: string }) =>

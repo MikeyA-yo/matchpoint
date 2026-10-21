@@ -3,7 +3,7 @@ import { useApi } from "../../lib/context";
 import { CHANNEL_LABEL, fmtDateTime, fmtTime } from "../../lib/format";
 import { useAction, useQuery, useStream } from "../../lib/hooks";
 import { useProductNames } from "../../lib/products";
-import { CHANNELS, type Channel, type Consent, type Customer, type Message, type RespondAction, type RewardsAccount } from "../../lib/types";
+import { CHANNELS, CONTACT_CHANNELS, type Channel, type Consent, type Customer, type Message, type RespondAction, type RewardsAccount } from "../../lib/types";
 
 type Tab = "home" | "foryou" | "inbox" | "rewards" | "settings";
 
@@ -259,7 +259,7 @@ function SettingsTab({ customerRef, consent, error, onSaved }: { customerRef: st
       </div>
       <div className="p-section">Channels</div>
       <div className="p-card">
-        {CHANNELS.map((ch) => (
+        {CONTACT_CHANNELS.map((ch) => (
           <PhoneSwitch
             key={ch}
             label={CHANNEL_LABEL[ch]}

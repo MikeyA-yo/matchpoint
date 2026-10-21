@@ -722,7 +722,7 @@ function requireSim(db: Db): string {
 
 function countOutcomes(decisions: Decision[]): Counts {
   const counts: Counts = { send: 0, hold: 0, silent: 0, review: 0 };
-  for (const d of decisions) counts[d.outcome] += 1;
+  for (const d of decisions) if (d.outcome !== "shown") counts[d.outcome] += 1;
   return counts;
 }
 

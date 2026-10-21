@@ -5,7 +5,7 @@ import { useApi, useSession } from "../lib/context";
 import { useAction } from "../lib/hooks";
 import { CHANNEL_LABEL } from "../lib/format";
 import { PERSONAS } from "../lib/personas";
-import { CHANNELS, type Channel, type Persona } from "../lib/types";
+import { CONTACT_CHANNELS, type Channel, type Persona } from "../lib/types";
 
 export function SignUp() {
   const api = useApi();
@@ -68,7 +68,7 @@ export function SignUp() {
               </label>
               <div className="hint">Contact me by</div>
               <div className="row" style={{ gap: 16 }}>
-                {CHANNELS.map((ch) => (
+                {CONTACT_CHANNELS.map((ch) => (
                   <label key={ch} className="checkbox">
                     <input type="checkbox" checked={channels[ch]} onChange={(e) => setChannels({ ...channels, [ch]: e.target.checked })} />
                     {CHANNEL_LABEL[ch]}

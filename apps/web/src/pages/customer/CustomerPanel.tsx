@@ -6,7 +6,7 @@ import { CHANNEL_LABEL, fmtDay, fmtTime, shiftDays } from "../../lib/format";
 import { useAction, useQuery, useStream } from "../../lib/hooks";
 import { useProductNames } from "../../lib/products";
 import { load, save } from "../../lib/storage";
-import { CHANNELS, type Customer, type Decision, type Pattern } from "../../lib/types";
+import { CONTACT_CHANNELS, type Customer, type Decision, type Pattern } from "../../lib/types";
 
 const EVENTS: { pattern: Pattern; label: string }[] = [
   { pattern: "salary_pattern", label: "Salary credited" },
@@ -34,7 +34,7 @@ export function CustomerPanel({ customer }: { customer: Customer }) {
 
   const holdings = profile.data?.holdings ?? customer.holdings;
   const c = consent.data;
-  const channels = c ? CHANNELS.filter((ch) => c.channels[ch]).map((ch) => CHANNEL_LABEL[ch]) : [];
+  const channels = c ? CONTACT_CHANNELS.filter((ch) => c.channels[ch]).map((ch) => CHANNEL_LABEL[ch]) : [];
   const log = (decisions.data?.items ?? []).filter((d) => d.mode === "live");
 
   return (

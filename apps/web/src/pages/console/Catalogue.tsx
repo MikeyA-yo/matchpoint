@@ -31,20 +31,20 @@ export function Products() {
           <Loading />
         ) : (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table table-cards">
               <thead><tr><th>Product</th><th>Category</th><th>Features</th><th>Eligibility</th><th className="num">Version</th><th /></tr></thead>
               <tbody>
                 {list.data?.items.map((p) => (
                   <tr key={p.id}>
-                    <td>
+                    <td data-label="Product">
                       {p.name} {p.is_credit && <Badge tone="blue">Credit</Badge>}
                       {technical && <div className="small faint mono">{p.id}</div>}
                     </td>
-                    <td className="small">{humanize(p.category)}</td>
-                    <td className="small muted">{p.features.join(" · ")}</td>
-                    <td className={technical ? "small mono" : "small"}>{technical ? p.eligibility.all.map((r) => `${r.fact} ${r.op} ${JSON.stringify(r.value)}`).join(" AND ") : p.eligibility.all.map((r) => describeRule(r, productName)).join(" · ")}</td>
-                    <td className="num">v{p.version}</td>
-                    <td className="num"><Button size="sm" variant="ghost" onClick={() => setEditing(p)}>Edit</Button></td>
+                    <td data-label="Category" className="small">{humanize(p.category)}</td>
+                    <td data-label="Features" className="small muted">{p.features.join(" · ")}</td>
+                    <td data-label="Eligibility" className={technical ? "small mono" : "small"}>{technical ? p.eligibility.all.map((r) => `${r.fact} ${r.op} ${JSON.stringify(r.value)}`).join(" AND ") : p.eligibility.all.map((r) => describeRule(r, productName)).join(" · ")}</td>
+                    <td data-label="Version" className="num">v{p.version}</td>
+                    <td data-label="" className="num"><Button size="sm" variant="ghost" onClick={() => setEditing(p)}>Edit</Button></td>
                   </tr>
                 ))}
               </tbody>

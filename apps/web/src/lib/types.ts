@@ -1,7 +1,8 @@
 // API contract shared by the live client and the mock backend.
 // Shapes follow docs/api_design.md; anything the doc leaves open is defined here (see section 5.5).
 
-export type Outcome = "send" | "hold" | "silent" | "review";
+// "shown" is logged by the API when For you lists a product; it is never delivered
+export type Outcome = "send" | "hold" | "silent" | "review" | "shown";
 export type Channel = "app" | "whatsapp" | "sms" | "email" | "ussd";
 export type Role = "product_owner" | "campaign_manager" | "compliance" | "dpo" | "customer";
 export type Persona = "salaried_parent" | "sme_owner" | "young_professional";
@@ -10,6 +11,8 @@ export type RespondAction = "opened" | "accepted" | "not_now" | "stop_offers";
 export type EvalMode = "live" | "dry_run";
 
 export const CHANNELS: Channel[] = ["app", "whatsapp", "sms", "ussd", "email"];
+// Channels a customer can turn on. The API stores email as always off (api_design.md 5.3).
+export const CONTACT_CHANNELS: Channel[] = ["app", "whatsapp", "sms", "ussd"];
 export const STAFF_ROLES: Role[] = ["product_owner", "campaign_manager", "compliance", "dpo"];
 export const PATTERNS: Pattern[] = ["salary_pattern", "fee_season", "sme_growth"];
 
@@ -60,6 +63,7 @@ export const OUTCOME_LABEL: Record<Outcome, string> = {
   hold: "Held",
   silent: "Not contacted",
   review: "In review",
+  shown: "Shown in app",
 };
 
 export interface Page<T> {

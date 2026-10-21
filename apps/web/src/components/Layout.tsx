@@ -39,11 +39,12 @@ export function Layout() {
           <label className="tech-toggle" title="Show endpoints, IDs, traces and API mode">
             <input type="checkbox" checked={technical} onChange={(e) => setTechnical(e.target.checked)} />
             <span className="switch-track" aria-hidden />
-            <span>Developer view</span>
+            <span className="hide-sm">Developer view</span>
+            <span className="show-sm">Dev</span>
           </label>
           {session ? (
             <>
-              <span className="small muted">{session.customer.name}</span>
+              <span className="small muted hide-sm">{session.customer.name}</span>
               <Button
                 variant="ghost"
                 size="sm"
@@ -58,7 +59,7 @@ export function Layout() {
           ) : (
             <>
               <Link to="/signin" className="btn btn-ghost btn-sm">Sign in</Link>
-              <Link to="/signup" className="btn btn-primary btn-sm">Open account</Link>
+              <Link to="/signup" className="btn btn-primary btn-sm hide-xs">Open account</Link>
             </>
           )}
         </div>

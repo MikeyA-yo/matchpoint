@@ -60,17 +60,17 @@ export function DemoPanel({ customer }: { customer: Customer }) {
           <Empty title="No decisions yet" />
         ) : (
           <div className="table-wrap">
-            <table className="table">
+            <table className="table table-cards">
               <thead>
                 <tr><th>As of</th><th>Outcome</th><th>Reasons</th><th>Product</th></tr>
               </thead>
               <tbody>
                 {decisions.data.items.map((d) => (
                   <tr key={d.id} className="clickable" onClick={() => setOpenDecision(d.id)}>
-                    <td className="small">{fmtDateTime(d.as_of)}</td>
-                    <td><OutcomeBadge outcome={d.outcome} /></td>
-                    <td><div className="row">{d.reasons.map((r) => <ReasonChip key={r} code={r} />)}</div></td>
-                    <td className="small">{productName(d.product_id) || "—"}</td>
+                    <td data-label="As of" className="small">{fmtDateTime(d.as_of)}</td>
+                    <td data-label="Outcome"><OutcomeBadge outcome={d.outcome} /></td>
+                    <td data-label="Reasons"><div className="row">{d.reasons.map((r) => <ReasonChip key={r} code={r} />)}</div></td>
+                    <td data-label="Product" className="small">{productName(d.product_id) || "—"}</td>
                   </tr>
                 ))}
               </tbody>

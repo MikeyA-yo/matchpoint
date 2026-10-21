@@ -77,7 +77,7 @@ export function Badge({ tone = "grey", children }: { tone?: Tone; children: Reac
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }
 
-const OUTCOME_TONE: Record<Outcome, Tone> = { send: "green", hold: "amber", silent: "grey", review: "blue" };
+const OUTCOME_TONE: Record<Outcome, Tone> = { send: "green", hold: "amber", silent: "grey", review: "blue", shown: "grey" };
 
 export function OutcomeBadge({ outcome }: { outcome: Outcome }) {
   const { technical } = useTechnical();
