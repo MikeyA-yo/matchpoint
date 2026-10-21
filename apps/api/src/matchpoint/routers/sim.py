@@ -1,4 +1,4 @@
-"""Demo control: start, reset, inject a pattern, read state (docs/api_design.md 5.4).
+"""Demo control: start, reset, inject a pattern, read state (docs/api_design.md 5.6).
 
 The simulator itself is only reachable through wiring; these routes are the HTTP edge.
 """

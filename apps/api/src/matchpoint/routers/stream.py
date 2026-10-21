@@ -1,4 +1,4 @@
-"""GET /stream: Server-Sent Events for the demo console (docs/api_design.md 5.5).
+"""GET /stream: Server-Sent Events for the demo console (docs/api_design.md 5.6).
 
 One generator per connection, fed by the runtime's event bus. A 15-second keep-alive
 comment keeps proxies from closing an idle stream; the browser's EventSource reconnects

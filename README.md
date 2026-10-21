@@ -45,7 +45,7 @@ pnpm lint       # ruff
 | `/app` | Customer page: phone view (inbox, Why, Not now, Stop offers, privacy settings) plus a demo panel to run decisions, inject patterns and watch events for that customer |
 | `/console/*` | Bank console: metrics, silence feed, review queue, run/batch, policies, products, campaign requests, experiments, model, simulator, live events, audit. Role switcher sends `X-Role` |
 
-Each card shows the endpoint(s) it calls. The contract lives in [apps/web/src/lib/types.ts](apps/web/src/lib/types.ts) and [section 5.5 of the design doc](docs/api_design.md).
+Each card shows the endpoint(s) it calls. The client contract lives in [apps/web/src/lib/types.ts](apps/web/src/lib/types.ts); for the implemented server contract see [section 4](docs/api_design.md) and for the live-mode gaps see [section 7](docs/api_design.md).
 
 **Mock vs live data.** The web app ships an in-browser mock backend ([apps/web/src/lib/mock.ts](apps/web/src/lib/mock.ts)) that follows the same contract, uses the API's seven demo customers and product catalogue, and runs a simplified pipeline. In **Live API** mode every call goes to the API first and falls back to the mock only when the API has no such route yet, so endpoints switch over by themselves as they land. With Technical details on, the console sidebar lists which endpoints were live and which were mocked. The pill in the header (shown with Technical details on) switches per browser; `VITE_API_MOCK=false` changes the default. Mock state is shared across tabs, so open the phone and the console side by side. `POST /sim/reset` in the console clears it.
 

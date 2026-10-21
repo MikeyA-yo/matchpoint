@@ -1,4 +1,4 @@
-"""Server-sent event shapes for GET /stream (docs/api_design.md section 5.4).
+"""Server-sent event shapes for GET /stream (docs/api_design.md section 5.6).
 
 Every payload carries `at`, and `customer_ref` when it concerns one customer. The
 console renders exactly these fields (apps/web/src/components/EventFeed.tsx) and listens
