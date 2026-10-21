@@ -101,49 +101,56 @@ function requireRole(role: Role | undefined, allowed: Role[]) {
 
 type TriggerDef = { evidence: string; sentence: string; category: string; label: string; products: string[] };
 
-// Trigger types match the backend catalogue's gain_model names
+// Trigger types follow the backend's signal names; products are Zenith's confirmed catalogue
 const TRIGGERS: Record<string, TriggerDef> = {
   salary_regular: {
     evidence: "salary on the 25th, 4 months",
     sentence: "your salary arrives on the 25th",
     category: "income",
     label: "salary payments",
-    products: ["prd_target_savings", "prd_personal_loan"],
+    products: ["prd_save4me", "prd_salary_advance", "prd_personal_loan"],
   },
   fee_season: {
     evidence: "fees paid each January and September",
     sentence: "you have paid school fees each January and September",
     category: "education",
     label: "school fee payments",
-    products: ["prd_target_savings"],
+    products: ["prd_save4me", "prd_education_loan"],
+  },
+  surplus: {
+    evidence: "₦150k+ left at month end, 4 months",
+    sentence: "you usually have money left over at the end of the month",
+    category: "income",
+    label: "account balance",
+    products: ["prd_fixed_deposit", "prd_eazysave_premium"],
   },
   pos_inflow_growth: {
     evidence: "POS inflows up 38% over 3 months",
     sentence: "your POS sales have grown for three months",
     category: "business",
     label: "POS sales",
-    products: ["prd_business_collections"],
+    products: ["prd_msme_loan"],
   },
   small_frequent_spend: {
     evidence: "40+ card payments under ₦5k a month",
     sentence: "you make lots of small card payments",
     category: "spending",
     label: "card payments",
-    products: ["prd_savings_round_up"],
+    products: ["prd_eazysave_classic", "prd_aspire"],
   },
   recurring_bill_pattern: {
     evidence: "DSTV and power paid monthly, 6 months",
     sentence: "you pay DSTV and power bills every month",
     category: "bills",
     label: "bill payments",
-    products: ["prd_bills_autopay"],
+    products: ["prd_virtual_card"],
   },
   international_spend: {
     evidence: "USD card payments online, 3 months",
     sentence: "you often pay for things in dollars online",
     category: "spending",
     label: "online dollar payments",
-    products: ["prd_fx_card"],
+    products: ["prd_domiciliary", "prd_virtual_card"],
   },
   betting_spend: {
     evidence: "regular payments to betting merchants",
@@ -155,69 +162,82 @@ const TRIGGERS: Record<string, TriggerDef> = {
 };
 
 const BASE_UPLIFT: Record<string, number> = {
-  prd_target_savings: 0.071,
-  prd_business_collections: 0.083,
-  prd_savings_round_up: 0.034,
-  prd_personal_loan: 0.052,
-  prd_fx_card: 0.041,
-  prd_bills_autopay: 0.028,
+  prd_save4me: 0.071,
+  prd_eazysave_classic: 0.034,
+  prd_eazysave_premium: 0.044,
+  prd_fixed_deposit: 0.06,
+  prd_domiciliary: 0.058,
+  prd_virtual_card: 0.036,
+  prd_aspire: 0.03,
+  prd_timeless: 0.02,
+  prd_salary_advance: 0.052,
+  prd_personal_loan: 0.047,
+  prd_education_loan: 0.055,
+  prd_msme_loan: 0.052,
 };
 
 const TITLES: Record<string, string> = {
-  prd_target_savings: "Make your salary work towards a goal",
-  prd_business_collections: "Your sales are growing",
-  prd_savings_round_up: "Save your spare change",
+  prd_save4me: "Make your salary work towards a goal",
+  prd_eazysave_classic: "Save your spare change",
+  prd_eazysave_premium: "Earn more on what you keep",
+  prd_fixed_deposit: "Put idle cash to work",
+  prd_domiciliary: "Hold dollars in your own account",
+  prd_virtual_card: "Pay online with a virtual card",
+  prd_aspire: "Banking built for students",
+  prd_timeless: "An account made for over-60s",
+  prd_salary_advance: "A cushion before payday",
   prd_personal_loan: "A loan with fixed repayments",
-  prd_fx_card: "Pay in dollars online",
-  prd_bills_autopay: "Never miss a bill",
+  prd_education_loan: "School fees, paid straight to the school",
+  prd_msme_loan: "Funding to grow your business",
 };
 
-// Copied from the backend catalogue (apps/api/src/matchpoint/simulator/transports/catalogue.py)
+// Zenith Bank's confirmed retail products. Features are described generically: no rates or terms.
 function seedProducts(): Product[] {
   const adult: EligibilityRule = { fact: "age", op: ">=", value: 18 };
+  const notHeld = (id: string): EligibilityRule => ({ fact: "holds", op: "not_contains", value: id });
+  const segments = (...s: string[]): EligibilityRule => ({ fact: "segment", op: "in", value: s });
+  const p = (
+    id: string, name: string, category: string, is_credit: boolean,
+    features: string[], key_facts: string[], rules: EligibilityRule[],
+  ): Product => ({ id, name, category, is_credit, features, key_facts, eligibility: { all: rules }, version: 1 });
+
   return [
-    {
-      id: "prd_target_savings", name: "Target savings account", category: "savings", is_credit: false,
-      features: ["Set a goal", "Automatic monthly transfer"],
-      eligibility: { all: [adult, { fact: "holds", op: "not_contains", value: "prd_target_savings" }] },
-      version: 3, key_facts: ["No monthly fee", "Goal reminders", "Interest on balance"],
-      gain_model: "salary_regular + fee_season", compare_group: "salaried-no-savings-goal",
-    },
-    {
-      id: "prd_business_collections", name: "Business collections account", category: "business", is_credit: false,
-      features: ["POS-ready", "Settlement in 24h", "USSD-friendly"],
-      eligibility: { all: [{ fact: "segment", op: "in", value: ["trader", "sme"] }, { fact: "holds", op: "not_contains", value: "prd_business_collections" }] },
-      version: 2, key_facts: ["Faster settlement", "POS without upfront cost", "USSD check"],
-      gain_model: "pos_inflow_growth", compare_group: "sme-growing-inflows",
-    },
-    {
-      id: "prd_savings_round_up", name: "Round-up savings", category: "savings", is_credit: false,
-      features: ["Rounds spare change", "Visible balance", "Withdraw any time"],
-      eligibility: { all: [adult] },
-      version: 1, key_facts: ["No monthly fee", "No lock-in"],
-      gain_model: "small_frequent_spend", compare_group: "salaried-active-pos",
-    },
-    {
-      id: "prd_personal_loan", name: "Personal loan", category: "credit", is_credit: true,
-      features: ["Fixed monthly repayment", "Up to 24 months"],
-      eligibility: { all: [{ fact: "age", op: ">=", value: 21 }, { fact: "segment", op: "in", value: ["salaried"] }, { fact: "holds", op: "not_contains", value: "personal_loan" }] },
-      version: 4, key_facts: ["Fixed APR", "No early-repayment penalty"],
-      gain_model: "salary_regular + no_existing_loan", compare_group: "salaried-no-active-loan",
-    },
-    {
-      id: "prd_fx_card", name: "Dollar FX card", category: "cards", is_credit: false,
-      features: ["Spend in USD", "Online payments abroad"],
-      eligibility: { all: [adult, { fact: "segment", op: "in", value: ["salaried", "sme"] }] },
-      version: 1, key_facts: ["$10/year", "Instant freeze in app"],
-      gain_model: "international_spend", compare_group: "salaried-abroad",
-    },
-    {
-      id: "prd_bills_autopay", name: "Bills autopay", category: "service", is_credit: false,
-      features: ["Schedule DSTV, power and water", "Pause any time"],
-      eligibility: { all: [adult] },
-      version: 1, key_facts: ["No service charge", "Reminders before each run"],
-      gain_model: "recurring_bill_pattern", compare_group: "salaried-active-bills",
-    },
+    p("prd_save4me", "Save4Me", "savings", false,
+      ["Save towards a goal", "Automatic monthly transfer"], ["Set your own target", "Choose how often you save"],
+      [adult, notHeld("prd_save4me")]),
+    p("prd_eazysave_classic", "eaZySave Classic", "savings", false,
+      ["Save small amounts often", "Withdraw when you need to"], ["Low opening balance", "Interest on savings"],
+      [adult, notHeld("prd_eazysave_classic")]),
+    p("prd_eazysave_premium", "eaZySave Premium", "savings", false,
+      ["A higher tier for larger balances", "Withdraw when you need to"], ["Interest on savings"],
+      [adult, segments("salaried", "sme", "trader"), notHeld("prd_eazysave_premium")]),
+    p("prd_fixed_deposit", "Fixed Deposit", "investments", false,
+      ["Lock in a rate for a fixed term", "Interest paid at maturity"], ["Choose your term"],
+      [adult]),
+    p("prd_domiciliary", "Domiciliary Account", "fx", false,
+      ["Hold USD, EUR or GBP", "Send and receive foreign currency"], ["Multi-currency"],
+      [adult, notHeld("prd_domiciliary")]),
+    p("prd_virtual_card", "Virtual card", "cards", false,
+      ["Pay online and for subscriptions", "Freeze it any time in the app"], ["Instant to set up"],
+      [adult, notHeld("prd_virtual_card")]),
+    p("prd_aspire", "Zenith Aspire", "youth", false,
+      ["An account built for students", "Comes with an Aspire card"], ["For students"],
+      [segments("student"), notHeld("prd_aspire")]),
+    p("prd_timeless", "Zenith Timeless Account", "seniors", false,
+      ["An account for customers over 60"], ["For over-60s"],
+      [{ fact: "age", op: ">=", value: 60 }, notHeld("prd_timeless")]),
+    p("prd_salary_advance", "Salary Advance", "credit", true,
+      ["Access part of your salary before payday", "Repaid from your next salary"], ["For salary earners"],
+      [adult, segments("salaried"), notHeld("prd_salary_advance")]),
+    p("prd_personal_loan", "Personal Loan", "credit", true,
+      ["Fixed monthly repayments", "Repay over an agreed term"], ["For salary earners"],
+      [{ fact: "age", op: ">=", value: 21 }, segments("salaried"), notHeld("prd_personal_loan"), notHeld("personal_loan")]),
+    p("prd_education_loan", "Education Loan", "credit", true,
+      ["Paid directly to the school", "Spread the cost of fees"], ["Paid to the school"],
+      [{ fact: "age", op: ">=", value: 21 }, segments("salaried"), notHeld("prd_education_loan")]),
+    p("prd_msme_loan", "MSME Loan", "credit", true,
+      ["Working capital for small businesses", "Repayments matched to your cash flow"], ["For small businesses"],
+      [segments("trader", "sme"), notHeld("prd_msme_loan")]),
   ];
 }
 
@@ -431,8 +451,10 @@ function channelStats(db: Db) {
 }
 
 const GAINS: Record<string, { amount_ngn: number; period_months: number; basis: string; example_rate: boolean }> = {
-  prd_target_savings: { amount_ngn: 8500, period_months: 12, basis: "An illustrative 10% a year.", example_rate: true },
-  prd_savings_round_up: { amount_ngn: 6800, period_months: 12, basis: "An illustrative 8% a year.", example_rate: true },
+  prd_save4me: { amount_ngn: 8500, period_months: 12, basis: "An illustrative 10% a year.", example_rate: true },
+  prd_eazysave_classic: { amount_ngn: 6800, period_months: 12, basis: "An illustrative 8% a year.", example_rate: true },
+  prd_eazysave_premium: { amount_ngn: 12000, period_months: 12, basis: "An illustrative 10% a year.", example_rate: true },
+  prd_fixed_deposit: { amount_ngn: 42000, period_months: 12, basis: "An illustrative 14% a year on ₦300,000.", example_rate: true },
 };
 
 // ---------- events ----------
@@ -553,7 +575,7 @@ function compose(product: Product, triggers: Trigger[]) {
   const labels = triggers.map((t) => TRIGGERS[t.type]?.label).filter(Boolean);
   return {
     title: TITLES[product.id] ?? `${product.name} could help`,
-    body: `${lead}A ${product.name.toLowerCase()} can help: ${product.features.map((f) => f.toLowerCase()).join(", ")}.`,
+    body: `${lead}${product.name} can help: ${product.features.map((f) => f.charAt(0).toLowerCase() + f.slice(1)).join(", ")}.`,
     why: `Based on your ${labels.join(" and ")}. You allowed personalised offers.`,
   };
 }

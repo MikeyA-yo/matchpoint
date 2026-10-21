@@ -321,6 +321,7 @@ const naira = (n: number) => `₦${n.toLocaleString("en-NG")}`;
 
 function ForYouTab({ customerRef, refreshKey, onPrivacy }: { customerRef: string; refreshKey: string; onPrivacy: () => void }) {
   const api = useApi();
+  const productName = useProductNames();
   const forYou = useQuery(() => api.forYou(customerRef), [customerRef, refreshKey]);
 
   if (forYou.loading && !forYou.data) return <p className="p-msg-meta" style={{ textAlign: "center", padding: 24 }}>Loading…</p>;
@@ -336,7 +337,7 @@ function ForYouTab({ customerRef, refreshKey, onPrivacy }: { customerRef: string
       )}
       {data.items.map((item) => (
         <div key={item.product_id} className="p-card stack-sm">
-          <div className="p-msg-title">{item.name}</div>
+          <div className="p-msg-title">{productName(item.product_id, item.name)}</div>
           {item.gain && (
             <div className="p-gain">
               Could earn about <strong>{naira(item.gain.amount_ngn)}</strong> in {item.gain.period_months} months

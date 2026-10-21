@@ -42,7 +42,7 @@ export function CustomerPanel({ customer }: { customer: Customer }) {
       <Card title="Account">
         <dl className="kv">
           <dt>Products</dt>
-          <dd>{holdings.map(productName).join(", ")}</dd>
+          <dd>{holdings.map((h) => productName(h)).join(", ")}</dd>
           <dt>Personalised offers</dt>
           <dd>{c ? (c.personalised_offers ? "On" : "Off") : "…"}</dd>
           <dt>Contact by</dt>

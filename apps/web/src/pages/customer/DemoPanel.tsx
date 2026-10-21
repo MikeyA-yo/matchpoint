@@ -36,7 +36,7 @@ export function DemoPanel({ customer }: { customer: Customer }) {
           <div><div className="faint">Customer ref</div><code>{p.customer_ref}</code></div>
           <div><div className="faint">Profile</div>{p.persona ? PERSONAS[p.persona].label : p.story ?? segmentLabel(p.segment)}</div>
           <div><div className="faint">Segment</div>{segmentLabel(p.segment)} · age {p.age_band}</div>
-          <div><div className="faint">Holds</div>{p.holdings.map(productName).join(", ")}</div>
+          <div><div className="faint">Holds</div>{p.holdings.map((h) => productName(h)).join(", ")}</div>
         </div>
       </Card>
 

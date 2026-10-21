@@ -26,7 +26,7 @@ export const PERSONAS: Record<Persona, Seed & { label: string; description: stri
     age_band: "25-34",
     segment: "sme",
     holdings: ["current_account"],
-    triggers: ["pos_inflow_growth"],
+    triggers: ["pos_inflow_growth", "surplus"],
     uplift: 1,
   },
   young_professional: {
@@ -62,7 +62,7 @@ export const DEMO_CUSTOMERS: (Seed & {
     key: "adaeze", name: "Adaeze Okafor", ref: "cus_231e711a96dd", phone: "08010000001",
     age_band: "25-34", segment: "salaried", holdings: ["current_account"],
     channels: { ...ALL_OFF, app: true, whatsapp: true, email: true }, personalised_offers: true,
-    triggers: ["salary_regular"], uplift: 1,
+    triggers: ["salary_regular", "surplus"], uplift: 1,
     note: "Salaried · Lagos",
   },
   {

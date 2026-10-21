@@ -570,6 +570,7 @@ Asks for the API, in demo order:
 2. `GET /decisions` (filters `customer_ref`, `outcome`), so the console stops relying on copied decisions.
 3. Invalidate cached decisions when consent changes. Today, after Stop offers, re-running at the same `as_of` returns the earlier `send`.
 4. Plain-language `why` on for-you items.
+5. Move the simulator catalogue to Zenith's confirmed products. The web mock already uses them (`seedProducts` and `TRIGGERS` in `apps/web/src/lib/mock.ts`: Save4Me, eaZySave Classic and Premium, Fixed Deposit, Domiciliary Account, Virtual card, Zenith Aspire, Zenith Timeless, Salary Advance, Personal Loan, Education Loan, MSME Loan). Until then the web app shows the API's `prd_target_savings` as Save4Me and keeps its other product names; live message copy still says "target savings account".
 
 ## 8. Not built (design backlog)
 
@@ -627,7 +628,7 @@ The experiment protocol and build order from v0.2 remain in git history.
 
 - NCC promotional SMS window and Do Not Disturb handling, from the directive itself.
 - Whether in-app and WhatsApp messages need separate consent wording under Zenith's policy.
-- Real Zenith product names, eligibility rules, and which products count as credit.
+- Real Zenith product names: confirmed list adopted in the web mock (section 7, ask 5). Still to verify: eligibility rules, and which products count as credit.
 - Facilitator answers: hosted LLM allowed or local only, work after 4 PM, pre-written code and downloaded models.
 - Legal view on incentivised consent under Nigerian data protection rules.
 - Whether points create an accounting liability for Zenith, and how Zenith would value them.
