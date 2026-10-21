@@ -63,6 +63,7 @@ class Context:
     message: Message | None = None
     gain_kobo: int | None = None
     scheduled_for: datetime | None = None
+    reasons: list[str] = field(default_factory=list)
 
     @property
     def holdings(self) -> tuple[str, ...]:

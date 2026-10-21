@@ -2,15 +2,19 @@
 
 Steps 1-3 are the gate: consent, opt-out/complaint, then context. Nothing beyond the
 consent record is read until the customer has said yes to personalised offers, which is
-the point of the demo. Steps 4-6 detect, match and apply hard rules. Steps 7-10 stop with
-PIPELINE_INCOMPLETE until they land.
+the point of the demo. Steps 4-6 detect, match and apply hard rules. Steps 7-10 pick one,
+write the message, check it and deliver it.
 """
 
 from __future__ import annotations
 
+from matchpoint.models import OutboundMessage
 from matchpoint.pipeline import rules
 from matchpoint.pipeline.context import Context, ScoredProduct
 from matchpoint.pipeline.detector import detect_signals
+from matchpoint.pipeline.explainer import explain
+from matchpoint.pipeline.guardrail import run_checks
+from matchpoint.pipeline.ids import decision_id, message_id
 from matchpoint.pipeline.matcher import build_candidates
 from matchpoint.pipeline.schemas import Candidate, Trigger
 from matchpoint.pipeline.trace import StepResult
@@ -229,29 +233,146 @@ def _row(candidate: ScoredProduct) -> Candidate:
 
 def pick_one(ctx: Context) -> StepResult:
     """Step 7. Take the top-scoring candidate that passed every rule."""
-    return _pending(7, "pick_one")
+    viable = [
+        candidate
+        for candidate in ctx.candidates
+        if candidate.eligible and candidate.score > 0 and candidate.dropped is None
+    ]
+    if not viable:
+        return StepResult(
+            7, "pick_one", "NO_MATCH", "No candidate passed every rule.", outcome="silent"
+        )
+    threshold = ctx.policy.min_uplift
+    above = [candidate for candidate in viable if candidate.uplift >= threshold]
+    if not above:
+        best = viable[0]
+        ctx.trace.check(
+            "LOW_UPLIFT",
+            False,
+            f"{best.product.id}: uplift {best.uplift:.3f} is below {threshold}",
+        )
+        return StepResult(
+            7,
+            "pick_one",
+            "LOW_UPLIFT",
+            "The best candidate is below the uplift threshold.",
+            outcome="hold",
+        )
+
+    winner = above[0]
+    ctx.product = winner.product
+    ctx.channel = winner.channel
+    ctx.scheduled_for = winner.scheduled_for
+    ctx.reasons.extend(reason for reason in winner.reasons if reason not in ctx.reasons)
+    ctx.trace.check(
+        "LOW_UPLIFT",
+        True,
+        f"{winner.product.id}: uplift {winner.uplift:.3f} is above {threshold}",
+    )
+    return StepResult(
+        7,
+        "pick_one",
+        "OK",
+        f"{winner.product.id} won the slot at {winner.uplift:.3f} uplift",
+    )
 
 
 def build_message(ctx: Context) -> StepResult:
     """Step 8. Fill the approved template with evidence, the gain and key facts."""
-    return _pending(8, "build_message")
+    if ctx.product is None:
+        return StepResult(
+            8,
+            "build_message",
+            "TEMPLATE_MISSING",
+            "No product was picked, so there is no message.",
+            outcome="silent",
+        )
+    ctx.message, ctx.gain_kobo = explain(ctx.product, ctx.signals, ctx.transactions)
+    return StepResult(
+        8, "build_message", "OK", f"Message prepared for {ctx.product.id}"
+    )
 
 
 def guardrail(ctx: Context) -> StepResult:
     """Step 9. Three CBN checks on the message before it can go out."""
-    return _pending(9, "guardrail")
+    if ctx.message is None:
+        return StepResult(
+            9,
+            "guardrail",
+            "GUARDRAIL_BLOCKED",
+            "No message was available to check.",
+            outcome="hold",
+        )
+    checks = run_checks(ctx.message, ctx.policy)
+    for check in checks:
+        ctx.trace.check(check.rule, check.passed, check.detail)
+    if not all(check.passed for check in checks):
+        ctx.message = None
+        return StepResult(
+            9,
+            "guardrail",
+            "GUARDRAIL_BLOCKED",
+            "The message failed a safety check.",
+            outcome="hold",
+        )
+    return StepResult(9, "guardrail", "OK", "All three safety checks passed")
 
 
 def deliver(ctx: Context) -> StepResult:
     """Step 10. Choose the channel, call the gateway in live mode, write the log."""
-    return _pending(10, "deliver")
+    if ctx.product is None or ctx.message is None:
+        return StepResult(
+            10,
+            "deliver",
+            "TEMPLATE_MISSING",
+            "Nothing was ready to deliver.",
+            outcome="hold",
+        )
+    existing = ctx.log.get(
+        decision_id(ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode)
+    )
+    if existing is not None:
+        return StepResult(
+            10, "deliver", "OK", "Decision already recorded; not sent again."
+        )
+    if ctx.mode == "dry_run":
+        return StepResult(10, "deliver", "OK", "Dry run: the gateway was not called")
+    if ctx.channel is None:
+        return StepResult(
+            10,
+            "deliver",
+            "NO_CHANNEL_CONSENT",
+            "No consented channel is left.",
+            outcome="hold",
+        )
+    if ctx.scheduled_for is not None and ctx.scheduled_for > ctx.as_of:
+        return StepResult(
+            10,
+            "deliver",
+            "OK",
+            f"Scheduled for {ctx.scheduled_for.isoformat()}; gateway not called now",
+        )
 
-
-def _pending(step: int, name: str) -> StepResult:
+    msg = OutboundMessage(
+        id=message_id(ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode),
+        customer_ref=ctx.customer_ref,
+        channel=ctx.channel,
+        title=ctx.message.title,
+        body=ctx.message.body,
+        why=ctx.message.why,
+        kind="marketing",
+        product_id=ctx.product.id,
+    )
+    receipt = ctx.adapters.channels.send(msg, purpose="marketing")
+    if receipt.status in ("accepted", "queued"):
+        return StepResult(
+            10, "deliver", "OK", f"{ctx.channel}: {receipt.status}"
+        )
+    ctx.message = None
     return StepResult(
-        step=step,
-        name=name,
-        reason="PIPELINE_INCOMPLETE",
-        detail="Not built yet: the pipeline stops before this step.",
-        outcome="silent",
+        10,
+        "deliver",
+        "NO_CHANNEL_CONSENT",
+        f"{ctx.channel} rejected the message: {receipt.reason}",
+        outcome="hold",
     )

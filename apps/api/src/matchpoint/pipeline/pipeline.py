@@ -6,10 +6,9 @@ proceed. The Decision is written to the append-only log exactly once per derived
 
 from __future__ import annotations
 
-import hashlib
-
 from matchpoint.adapters.errors import CustomerNotFound
 from matchpoint.pipeline.context import Context
+from matchpoint.pipeline.ids import decision_id
 from matchpoint.pipeline.schemas import REASON_CODES, Decision
 from matchpoint.pipeline.steps import (
     apply_rules,
@@ -64,6 +63,7 @@ def ensure_customer(ctx: Context) -> None:
 def _finish(ctx: Context, result: StepResult) -> Decision:
     outcome = result.outcome or "silent"
     reason = result.reason if result.reason in REASON_CODES else "NO_MATCH"
+    reasons = [reason, *(extra for extra in ctx.reasons if extra != reason)]
     product_id = ctx.product.id if ctx.product else None
     decision = Decision(
         id=decision_id(ctx.customer_ref, product_id, ctx.as_of, ctx.mode),
@@ -73,15 +73,9 @@ def _finish(ctx: Context, result: StepResult) -> Decision:
         outcome=outcome,
         product_id=product_id,
         channel=ctx.channel,
-        reasons=[reason],
+        reasons=reasons,
         scheduled_for=ctx.scheduled_for,
         trace=ctx.trace.model(ctx.policy.id),
         message=ctx.message,
     )
     return ctx.log.append(decision)
-
-
-def decision_id(customer_ref: str, product_id: str | None, as_of, mode: str) -> str:
-    """Derived from customer, product and as_of, so a re-run returns the same record."""
-    material = f"{customer_ref}|{product_id or 'none'}|{as_of.isoformat()}|{mode}"
-    return f"dec_{hashlib.sha256(material.encode()).hexdigest()[:6]}"
