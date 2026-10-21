@@ -1,11 +1,12 @@
 """The single error envelope from docs/api_design.md section 2."""
 
-import secrets
-
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from matchpoint.adapters.errors import ConnectorError
+from matchpoint.trace import current_trace_id
 
 
 class ApiError(Exception):
@@ -16,16 +17,19 @@ class ApiError(Exception):
 
 
 def _envelope(status: int, code: str, message: str) -> JSONResponse:
-    trace_id = f"trc_{secrets.token_hex(2)}"
     return JSONResponse(
         status_code=status,
-        content={"error": {"code": code, "message": message, "trace_id": trace_id}},
+        content={"error": {"code": code, "message": message, "trace_id": current_trace_id()}},
     )
 
 
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, exc: ApiError) -> JSONResponse:
+        return _envelope(exc.status, exc.code, exc.message)
+
+    @app.exception_handler(ConnectorError)
+    async def _connector_error(_: Request, exc: ConnectorError) -> JSONResponse:
         return _envelope(exc.status, exc.code, exc.message)
 
     @app.exception_handler(StarletteHTTPException)

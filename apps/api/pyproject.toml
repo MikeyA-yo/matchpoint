@@ -31,4 +31,30 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "TID251"]
+
+# Decisions take time from an injected Clock and randomness from a seeded random.Random.
+# Services receive adapters by injection and never import the simulator.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"datetime.datetime.now".msg = "Use the injected Clock (matchpoint.clock), never now()."
+"datetime.datetime.utcnow".msg = "Use the injected Clock (matchpoint.clock), never now()."
+"datetime.datetime.today".msg = "Use the injected Clock (matchpoint.clock), never now()."
+"datetime.date.today".msg = "Use the injected Clock (matchpoint.clock), never today()."
+"time.time".msg = "Use the injected Clock (matchpoint.clock)."
+"time.time_ns".msg = "Use the injected Clock (matchpoint.clock)."
+"random.random".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.randint".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.randrange".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.choice".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.choices".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.sample".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.shuffle".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.uniform".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.gauss".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.lognormvariate".msg = "Use a seeded stream from simulator.rng.derive()."
+"random.seed".msg = "Use a seeded stream from simulator.rng.derive()."
+"matchpoint.simulator".msg = "Services get adapters by injection. Only wiring.py may import the simulator."
+
+[tool.ruff.lint.per-file-ignores]
+"src/matchpoint/simulator/**" = ["TID251"]
+"src/matchpoint/wiring.py" = ["TID251"]

@@ -26,33 +26,39 @@ MATCHPOINT is a decision layer that sits between a bank's product teams and its 
 ### Adapter interfaces
  
 ```python
+Purpose = Literal["profiling", "marketing", "service"]
+
 class TransactionFeed(Protocol):
-    def window(self, customer_ref: str, start: datetime, end: datetime) -> list[Txn]: ...
+    def window(self, customer_ref: str, start: datetime, end: datetime, *, purpose: Purpose) -> list[Txn]: ...
  
 class ProductCatalogue(Protocol):
-    def active(self, as_of: datetime) -> list[Product]: ...
+    def active(self, as_of: datetime, *, purpose: Purpose) -> list[Product]: ...
  
 class CustomerProfile(Protocol):
-    def get(self, customer_ref: str) -> Profile: ...      # age band, segment, products held
+    def get(self, customer_ref: str, *, purpose: Purpose) -> Profile: ...      # age band, segment, products held
  
 class ConsentStore(Protocol):
-    def get(self, customer_ref: str) -> Consent: ...
-    def set(self, customer_ref: str, consent: Consent) -> Consent: ...
+    def get(self, customer_ref: str, *, purpose: Purpose) -> Consent: ...
+    def set(self, customer_ref: str, consent: Consent, *, purpose: Purpose) -> Consent: ...
  
 class ChannelGateway(Protocol):
-    def send(self, msg: OutboundMessage) -> DeliveryReceipt: ...
+    def send(self, msg: OutboundMessage, *, purpose: Purpose) -> DeliveryReceipt: ...
  
 class RewardsFulfilment(Protocol):
-    def fulfil(self, redemption: Redemption) -> FulfilmentReceipt: ...   # airtime, voucher, fee waiver
+    def fulfil(self, redemption: Redemption, *, purpose: Purpose) -> FulfilmentReceipt: ...   # airtime, voucher, fee waiver
 ```
  
-Rule: services never import a simulator directly. They receive adapters by dependency injection, so a pilot swaps the implementation, not the code.
+Rule: services never import a simulator directly. They receive adapters by dependency injection, so a pilot swaps the implementation, not the code. A lint test enforces this.
+
+Every adapter call states its purpose. A wrapper returns only the fields allowed for that purpose (for example, `marketing` sees a transaction's amount band but not its amount or narration) and logs the purpose, the fields returned and the trace ID. The field policy is in `apps/api/src/matchpoint/adapters/purpose.py`.
+
+Connector faults surface as defined errors in the envelope: `503 UPSTREAM_UNAVAILABLE`, `504 UPSTREAM_TIMEOUT`, `502 UPSTREAM_BAD_DATA`, `502 DELIVERY_FAILED`.
  
 ## 2. Conventions
  
 - Base path: `/api/v1`. JSON only. UTF-8.
 - Time: ISO 8601 with offset, for example `2026-12-03T09:02:00+01:00`. All decisions carry `as_of`, taken from the simulated clock, never from `now()`.
-- References: `customer_ref` is a keyed hash (`cus_8f3a`), never a real identifier. Other IDs: `dec_`, `msg_`, `pol_v3`, `prd_`, `exp_`.
+- References: `customer_ref` is a keyed hash (`cus_8f3a` in examples, 12 hex characters in practice so refs don't collide at population scale), never a real identifier. Other IDs: `dec_`, `msg_`, `pol_v3`, `prd_`, `exp_`.
 - Idempotency: a decision ID is derived from customer, product, and `as_of`, so re-running a decision returns the same record.
 - Roles: the demo reads an `X-Role` header (`product_owner`, `campaign_manager`, `compliance`, `dpo`, `customer`). There is no real authentication. Say so in the pitch.
 - Simulated data: every response that carries numbers includes `"simulated": true`.
