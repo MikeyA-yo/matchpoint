@@ -144,7 +144,7 @@ function PolicyEditor({ base, onSaved }: { base: Policy; onSaved: () => void }) 
           <Button variant="primary" loading={saveState.loading} onClick={async () => (await save(withBlocked())) && onSaved()}>
             Save as draft
           </Button>
-          {saveState.data && <span className="small green">Saved <code>{saveState.data.id}</code>. Approve it below.</span>}
+          {saveState.data && <span className="small ok-text">✓ Saved <code>{saveState.data.id}</code>. Approve it below.</span>}
         </div>
         {sim.data && <SimulationResult current={sim.data.current} proposed={sim.data.proposed} />}
       </div>
@@ -157,7 +157,7 @@ function SimulationResult({ current, proposed }: { current: PolicySimulation; pr
   const reasons = [...new Set([...Object.keys(current.by_reason), ...Object.keys(proposed.by_reason)])] as ReasonCode[];
   const delta = (a = 0, b = 0) => {
     const d = b - a;
-    return d === 0 ? <span className="faint">0</span> : <span className={d > 0 ? "green" : ""} style={d < 0 ? { color: "var(--amber)" } : undefined}>{d > 0 ? "+" : ""}{fmtNum(d)}</span>;
+    return d === 0 ? <span className="faint">0</span> : <span className={d > 0 ? "ok-text" : ""} style={d < 0 ? { color: "var(--amber)" } : undefined}>{d > 0 ? "+" : ""}{fmtNum(d)}</span>;
   };
   return (
     <div className="stack-sm">

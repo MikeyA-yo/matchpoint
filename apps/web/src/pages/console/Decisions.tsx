@@ -14,7 +14,7 @@ function DecisionTable({ items, onOpen }: { items: Decision[]; onOpen: (id: stri
   const productName = useProductNames();
   return (
     <div className="table-wrap">
-      <table className="table table-cards">
+      <table className="table table-cards decision-cards">
         <thead>
           <tr><th>As of</th><th>Customer</th><th>Outcome</th><th>Reasons</th><th>Product</th><th>Channel</th></tr>
         </thead>

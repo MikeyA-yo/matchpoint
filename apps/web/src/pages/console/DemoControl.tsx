@@ -74,7 +74,7 @@ export function Simulator() {
             <ErrorNote error={injectState.error} />
             <div className="row">
               <Button loading={injectState.loading} onClick={() => inject(pattern, target || undefined)}>Inject</Button>
-              {injectState.data && <span className="small green">Planted {humanize(injectState.data.pattern).toLowerCase()} for {injectState.data.affected.toLocaleString()} customer(s).</span>}
+              {injectState.data && <span className="small ok-text">✓ Planted {humanize(injectState.data.pattern).toLowerCase()} for {injectState.data.affected.toLocaleString()} customer(s).</span>}
             </div>
           </div>
         </Card>

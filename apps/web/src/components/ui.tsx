@@ -71,7 +71,7 @@ export function Endpoint({ value }: { value: string }) {
   );
 }
 
-type Tone = "green" | "amber" | "red" | "blue" | "grey";
+type Tone = "green" | "accent" | "amber" | "red" | "blue" | "grey";
 
 export function Badge({ tone = "grey", children }: { tone?: Tone; children: ReactNode }) {
   return <span className={`badge badge-${tone}`}>{children}</span>;

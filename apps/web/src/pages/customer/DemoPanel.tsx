@@ -189,7 +189,7 @@ function InjectCard({ customerRef }: { customerRef: string }) {
           {PATTERNS.map((p) => <option key={p} value={p}>{humanize(p)}</option>)}
         </select>
         <Button loading={state.loading} onClick={() => inject(pattern, customerRef)}>Inject</Button>
-        {state.data && <span className="small green">Planted {humanize(state.data.pattern).toLowerCase()}.</span>}
+        {state.data && <span className="small ok-text">✓ Planted {humanize(state.data.pattern).toLowerCase()}.</span>}
       </div>
       <div style={{ marginTop: 8 }}><ErrorNote error={state.error} /></div>
     </Card>

@@ -61,7 +61,7 @@ export function Overview() {
                 <span style={{ width: share(o.silent), background: "var(--border-strong)" }} />
               </div>
               <div className="row small muted" style={{ marginTop: 10, gap: 16 }}>
-                <span><span className="green">■</span> {OUTCOME_LABEL.send} {fmtNum(o.sent)}</span>
+                <span><span className="ok-text">■</span> {OUTCOME_LABEL.send} {fmtNum(o.sent)}</span>
                 <span><span style={{ color: "var(--blue)" }}>■</span> {OUTCOME_LABEL.review} {fmtNum(o.review)}</span>
                 <span><span style={{ color: "var(--amber)" }}>■</span> {OUTCOME_LABEL.hold} {fmtNum(o.held)}</span>
                 <span><span className="faint">■</span> {OUTCOME_LABEL.silent} {fmtNum(o.silent)}</span>

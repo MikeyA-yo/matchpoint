@@ -99,7 +99,7 @@ function ExperimentResult({ exp }: { exp: Experiment }) {
                   {exp.results.map((r) => {
                     const v = r[m.key] as number;
                     return (
-                      <td key={r.strategy} className="num" style={v === top ? { color: "var(--green)", fontWeight: 600 } : undefined}>
+                      <td key={r.strategy} className="num" style={v === top ? { color: "var(--green)", fontWeight: 700 } : undefined}>
                         {m.format(v)}
                       </td>
                     );

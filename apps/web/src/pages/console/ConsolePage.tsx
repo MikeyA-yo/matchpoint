@@ -106,7 +106,7 @@ function Health() {
   return (
     <>
       <div className="row small" style={{ padding: "4px 10px" }}>
-        <span className="live-dot" style={ok ? undefined : { background: "var(--red)", animation: "none" }} aria-hidden />
+        <span className="live-dot" style={{ background: ok ? "var(--green)" : "var(--amber)", animation: "none" }} aria-hidden />
         <span className="muted">{health.loading ? "Checking…" : ok ? (technical ? `API healthy (${health.data?.env})` : "Operational") : "API unreachable"}</span>
       </div>
       {technical && getMode() === "live" && endpoints.length > 0 && (

@@ -105,7 +105,7 @@ function HomeTab({ holdings, unread, onInbox }: { holdings: string[]; unread: nu
       {holdings.map((h) => (
         <div key={h} className="p-card row-between">
           <span>{productName(h)}</span>
-          <span className="p-tag">Active</span>
+          <span className="p-tag p-tag-ok">Active</span>
         </div>
       ))}
     </div>
