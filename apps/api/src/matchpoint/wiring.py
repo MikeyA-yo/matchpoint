@@ -23,8 +23,8 @@ from matchpoint.errors import ApiError
 from matchpoint.events.bus import EventBus
 from matchpoint.ledger.decision_log import DecisionLog
 from matchpoint.models import Channel
-from matchpoint.rewards.ledger import RewardsLedger
 from matchpoint.pipeline.policy import DEFAULT_POLICY, Policy
+from matchpoint.rewards.ledger import RewardsLedger
 from matchpoint.simulator import control
 from matchpoint.simulator.clock import SimClock
 from matchpoint.simulator.population import DEMO_CUSTOMERS

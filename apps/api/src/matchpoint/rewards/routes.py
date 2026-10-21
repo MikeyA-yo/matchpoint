@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Header
+from pydantic import BaseModel
 
 from matchpoint.errors import ApiError
 from matchpoint.rewards.account import account
@@ -25,6 +26,18 @@ def _parse_as_of(value: str | None):
     return datetime.fromisoformat(value)
 
 
+class RedeemRequest(BaseModel):
+    reward_id: str
+
+
+class EarnRequest(BaseModel):
+    customer_ref: str
+    event: str
+    purpose: str | None = None
+    product: str | None = None
+    as_of: str | None = None
+
+
 @router.get("/customers/{ref}/rewards")
 def get_rewards(ref: str):
     runtime = get_runtime()
@@ -34,13 +47,13 @@ def get_rewards(ref: str):
 @router.post("/customers/{ref}/rewards/redeem")
 def post_redeem(
     ref: str,
-    reward_id: str,
+    request: RedeemRequest,
     idempotency_key: str = Header(...),
 ):
     runtime = get_runtime()
     result = redeem(
         customer_ref=ref,
-        reward_id=reward_id,
+        reward_id=request.reward_id,
         idempotency_key=idempotency_key,
         ledger=runtime.rewards,
         clock=runtime.clock,
@@ -62,30 +75,26 @@ def post_redeem(
 
 @router.post("/rewards/events")
 def post_rewards_event(
-    customer_ref: str,
-    event: str,
-    purpose: str | None = None,
-    product: str | None = None,
-    as_of: str | None = None,
+    request: EarnRequest,
     x_role: str | None = Header(default=None, alias="X-Role"),
 ):
     if x_role != "system":
         raise ApiError(403, "ROLE_REQUIRED", "system role required")
 
     runtime = get_runtime()
-    parsed_as_of = _parse_as_of(as_of)
+    parsed_as_of = _parse_as_of(request.as_of)
 
     consent = None
-    if event in {"offer_feedback", "preferences_reviewed"}:
-        consent = runtime.adapters.consent.get(customer_ref, purpose="marketing")
+    if request.event in {"offer_feedback", "preferences_reviewed"}:
+        consent = runtime.adapters.consent.get(request.customer_ref, purpose="marketing")
 
     result = earn(
-        customer_ref=customer_ref,
-        event=event,
+        customer_ref=request.customer_ref,
+        event=request.event,
         ledger=runtime.rewards,
         clock=runtime.clock,
-        purpose=purpose,
-        product=product,
+        purpose=request.purpose,
+        product=request.product,
         as_of=parsed_as_of,
         events=runtime.events,
         consent=consent,
@@ -95,8 +104,8 @@ def post_rewards_event(
         raise ApiError(400, result.code, result.code)
 
     return {
-        "customer_ref": customer_ref,
-        "event": event,
+        "customer_ref": request.customer_ref,
+        "event": request.event,
         "points": result.points,
         "tier_changed": result.tier_changed,
         "tier": result.tier,

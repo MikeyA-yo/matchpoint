@@ -5,9 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from matchpoint.adapters.errors import ConnectorUnavailable
 from matchpoint.adapters.rewards.connector import SimRewardsFulfilment
-from matchpoint.adapters.purpose import Purpose
 from matchpoint.events.bus import EventBus
 from matchpoint.events.schemas import stream_event
 from matchpoint.models import FulfilmentReceipt, Redemption
@@ -34,12 +32,6 @@ def _catalogue_item(reward_id: str):
         if item["id"] == reward_id:
             return item
     return None
-
-
-def _kind_to_reward_kind(kind: str):
-    from matchpoint.models import RewardKind
-
-    return RewardKind(kind)  # type: ignore[arg-type]
 
 
 def redeem(
@@ -70,7 +62,7 @@ def redeem(
         id=str(uuid.uuid4()),
         customer_ref=customer_ref,
         reward_id=reward_id,
-        kind=_kind_to_reward_kind(item["kind"]),
+        kind=item["kind"],  # type: ignore[arg-type]
         points=item["points"],
         value_kobo=item["points"] * 100,
         idempotency_key=idempotency_key,

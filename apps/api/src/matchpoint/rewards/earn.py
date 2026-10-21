@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from matchpoint.adapters.errors import CustomerNotFound
 from matchpoint.events.bus import EventBus
 from matchpoint.events.schemas import stream_event
 from matchpoint.models import Consent
 from matchpoint.rewards.ledger import LedgerEntry, RewardsLedger
 from matchpoint.rewards.rules import (
-    CATALOGUE,
     CONSENT_REQUIRED_EVENTS,
     EARN,
     MAX_POINTS_PER_30D,
