@@ -42,4 +42,4 @@ export function shiftDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 19) + "+01:00";
 }
 
-export const CHANNEL_LABEL = { app: "In-app", whatsapp: "WhatsApp", sms: "SMS", email: "Email" } as const;
+export const CHANNEL_LABEL = { app: "In-app", whatsapp: "WhatsApp", sms: "SMS", email: "Email", ussd: "USSD" } as const;

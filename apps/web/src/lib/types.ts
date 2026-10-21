@@ -2,14 +2,14 @@
 // Shapes follow docs/api_design.md; anything the doc leaves open is defined here (see section 5.5).
 
 export type Outcome = "send" | "hold" | "silent" | "review";
-export type Channel = "app" | "whatsapp" | "sms" | "email";
+export type Channel = "app" | "whatsapp" | "sms" | "email" | "ussd";
 export type Role = "product_owner" | "campaign_manager" | "compliance" | "dpo" | "customer";
 export type Persona = "salaried_parent" | "sme_owner" | "young_professional";
 export type Pattern = "salary_pattern" | "fee_season" | "sme_growth";
 export type RespondAction = "opened" | "accepted" | "not_now" | "stop_offers";
 export type EvalMode = "live" | "dry_run";
 
-export const CHANNELS: Channel[] = ["app", "whatsapp", "sms", "email"];
+export const CHANNELS: Channel[] = ["app", "whatsapp", "sms", "ussd", "email"];
 export const STAFF_ROLES: Role[] = ["product_owner", "campaign_manager", "compliance", "dpo"];
 export const PATTERNS: Pattern[] = ["salary_pattern", "fee_season", "sme_growth"];
 
@@ -34,6 +34,34 @@ export const REASONS = {
 } as const;
 export type ReasonCode = keyof typeof REASONS;
 
+/** What staff see when Developer view is off. */
+export const REASON_LABEL: Record<ReasonCode, string> = {
+  OK: "All checks passed",
+  NO_CONSENT: "No consent",
+  OPTED_OUT: "Opted out",
+  NO_CHANNEL_CONSENT: "No contact channel",
+  SENSITIVE_TRIGGER: "Excluded data",
+  NOT_ELIGIBLE: "Not eligible",
+  ALREADY_HOLDS: "Already has it",
+  NO_MATCH: "No suitable product",
+  CAP_30D: "Monthly limit reached",
+  SAME_PRODUCT_60D: "Offered recently",
+  COOLDOWN_IGNORED: "Customer said not now",
+  QUIET_HOURS: "Quiet hours",
+  LOW_UPLIFT: "Low expected benefit",
+  ATTENTION_BUDGET: "Monthly limit reached",
+  GOVERNOR_LOST: "Lower priority",
+  CREDIT_REVIEW: "Needs approval",
+  GUARDRAIL_BLOCKED: "Failed content check",
+};
+
+export const OUTCOME_LABEL: Record<Outcome, string> = {
+  send: "Sent",
+  hold: "Held",
+  silent: "Not contacted",
+  review: "In review",
+};
+
 export interface Page<T> {
   items: T[];
   next_cursor: string | null;
@@ -52,7 +80,9 @@ export interface Customer {
   customer_ref: string;
   name: string;
   phone: string;
-  persona: Persona;
+  // Set for sign-ups; the seeded demo customers have their own story instead
+  persona?: Persona;
+  story?: string;
   age_band: string;
   segment: string;
   holdings: string[];
@@ -63,7 +93,8 @@ export interface Consent {
   personalised_offers: boolean;
   channels: Record<Channel, boolean>;
   updated_at: string;
-  source: string;
+  // The API leaves this out on GET
+  source?: string;
 }
 
 export type ConsentInput = Pick<Consent, "personalised_offers" | "channels">;
@@ -97,6 +128,9 @@ export interface Product {
   features: string[];
   eligibility: { all: EligibilityRule[] };
   version: number;
+  key_facts?: string[];
+  gain_model?: string | null;
+  compare_group?: string | null;
 }
 
 export type QuietHours = Partial<Record<Channel, { start: string; end: string }>>;
@@ -134,7 +168,7 @@ export interface PolicySimulation {
 export interface Trigger {
   type: string;
   evidence: string;
-  category?: string;
+  category?: string | null;
   blocked?: boolean;
 }
 
@@ -142,7 +176,16 @@ export interface Candidate {
   product_id: string;
   eligible: boolean;
   uplift: number;
-  dropped?: ReasonCode;
+  dropped?: ReasonCode | null;
+}
+
+/** One pipeline step as the backend ran it (docs/api_design.md section 6). */
+export interface StepTrace {
+  step: number;
+  name: string;
+  status: "ok" | "stop";
+  reason: string;
+  detail: string;
 }
 
 export interface RuleCheck {
@@ -160,11 +203,12 @@ export interface Decision {
   product_id: string | null;
   channel: Channel | null;
   reasons: ReasonCode[];
-  scheduled_for?: string;
+  scheduled_for?: string | null;
   trace: {
     triggers: Trigger[];
     candidates: Candidate[];
     rules: RuleCheck[];
+    steps?: StepTrace[];
     policy_version: string;
     model_version: string;
   };
@@ -211,7 +255,9 @@ export interface WhyResponse {
 }
 
 export interface RespondResult {
-  message: Message;
+  // The API returns { status } for most actions and the new consent for stop_offers
+  status?: string;
+  message?: Message;
   consent?: Consent;
 }
 
@@ -224,7 +270,70 @@ export interface MetricsOverview {
   review: number;
   opt_outs: number;
   sustained_use_60d: number;
+  // Results strip (30-day window)
+  window_days?: number;
+  as_of?: string;
+  notifications_sent?: number;
+  click_rate?: number;
+  product_uptake?: number;
+  control_group_uptake?: number;
   simulated: true;
+}
+
+export interface ChannelMetrics {
+  channel: Channel;
+  sent: number;
+  click_rate: number;
+  product_uptake: number;
+}
+
+export interface MetricsByChannel {
+  window_days: number;
+  channels: ChannelMetrics[];
+  total: Omit<ChannelMetrics, "channel">;
+  simulated: true;
+}
+
+// ---- For you (GET /customers/{ref}/for-you) ----
+
+export interface ForYouItem {
+  rank: number;
+  product_id: string;
+  name: string;
+  why: string;
+  gain: { amount_ngn: number; period_months: number; basis: string; example_rate?: boolean } | null;
+  key_facts: string[];
+  compare: { product_id: string; when_it_fits: string }[];
+}
+
+export interface ForYou {
+  personalised: boolean;
+  items: ForYouItem[];
+  note: string | null;
+  simulated: true;
+}
+
+// ---- Rewards ----
+
+export interface RewardsAccount {
+  customer_ref: string;
+  balance: number;
+  lifetime_earned: number;
+  tier: string;
+  next_tier: { name: string; points_needed: number } | null;
+}
+
+export interface RewardItem {
+  id: string;
+  name: string;
+  points: number;
+  kind: "airtime" | "voucher" | "fee_waiver";
+}
+
+export interface RedeemResult {
+  customer_ref: string;
+  balance: number;
+  receipt: { redemption_id: string; status: string; at: string; provider_ref?: string | null } | null;
 }
 
 export interface ProductMetrics {
@@ -273,6 +382,7 @@ export interface SimState extends SimConfig {
   running: boolean;
   clock: string | null;
   simulated: true;
+  simulated_customers?: number;
 }
 
 export type Strategy = "blast" | "caps_only" | "matchpoint";
@@ -308,7 +418,10 @@ export type StreamEventType =
   | "message_delivered"
   | "outcome_recorded"
   | "consent_changed"
-  | "policy_changed";
+  | "policy_changed"
+  | "points_awarded"
+  | "tier_changed"
+  | "points_redeemed";
 
 export const STREAM_EVENTS: StreamEventType[] = [
   "decision_created",
@@ -316,6 +429,9 @@ export const STREAM_EVENTS: StreamEventType[] = [
   "outcome_recorded",
   "consent_changed",
   "policy_changed",
+  "points_awarded",
+  "tier_changed",
+  "points_redeemed",
 ];
 
 export interface StreamEvent {

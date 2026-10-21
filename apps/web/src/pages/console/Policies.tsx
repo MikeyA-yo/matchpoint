@@ -1,9 +1,9 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import { Badge, Button, Card, ErrorNote, Field, Loading, Simulated, Switch } from "../../components/ui";
-import { useApi, useRole } from "../../lib/context";
+import { useApi, useRole, useTechnical } from "../../lib/context";
 import { CHANNEL_LABEL, fmtDateTime, fmtNum, humanize } from "../../lib/format";
 import { useAction, useQuery, useStream } from "../../lib/hooks";
-import { CHANNELS, type Policy, type PolicyDraft, type PolicySimulation, type ReasonCode } from "../../lib/types";
+import { CHANNELS, OUTCOME_LABEL, REASON_LABEL, type Policy, type PolicyDraft, type PolicySimulation, type ReasonCode } from "../../lib/types";
 import { ConsoleHead } from "./ConsolePage";
 
 function toDraft({ id: _i, status: _s, created_at: _c, approved_by: _a, ...draft }: Policy): PolicyDraft {
@@ -21,7 +21,7 @@ export function Policies() {
 
   return (
     <>
-      <ConsoleHead title="Policies">Versioned rules. Every version is kept; only compliance can activate one.</ConsoleHead>
+      <ConsoleHead title="Policies">{active ? `Active: ${active.id}` : null}</ConsoleHead>
       <div className="stack">
         <ErrorNote error={list.error} />
         {list.loading && !list.data && <Loading />}
@@ -30,7 +30,7 @@ export function Policies() {
         <Card title="Versions" endpoint={["GET /policies", "POST /policies/{version}/approve"]} bodyClass="">
           {role !== "compliance" && (
             <div className="card-body" style={{ paddingBottom: 0 }}>
-              <div className="alert alert-info">Switch to the Compliance role to approve a draft.</div>
+              <p className="small muted">Approving a draft requires the Compliance role.</p>
             </div>
           )}
           <div className="card-body" style={{ paddingTop: role !== "compliance" ? 12 : 0, paddingBottom: 0 }}>
@@ -39,7 +39,7 @@ export function Policies() {
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Version</th><th>Status</th><th>Created</th><th className="num">Cap / 30d</th><th className="num">Min uplift</th><th>Approved by</th><th /></tr>
+                <tr><th>Version</th><th>Status</th><th>Created</th><th className="num">Max / 30 days</th><th className="num">Min benefit</th><th>Approved by</th><th /></tr>
               </thead>
               <tbody>
                 {list.data?.items.map((p) => (
@@ -95,18 +95,18 @@ function PolicyEditor({ base, onSaved }: { base: Policy; onSaved: () => void }) 
 
   return (
     <Card
-      title={<>Draft a change <span className="small muted">based on <code>{base.id}</code></span></>}
-      sub="Simulate it over the population before saving. Saving creates a draft; it does nothing until approved."
+      title={<>New draft <span className="small muted">from <code>{base.id}</code></span></>}
+      sub="Drafts take effect after compliance approval."
       endpoint={["POST /policies/simulate", "PUT /policies"]}
     >
       <div className="stack">
         <div className="grid-4">
-          <Field label="Max messages / 30 days"><input className="input" type="number" min={0} {...num("max_messages_per_30d")} /></Field>
-          <Field label="Same product gap (days)"><input className="input" type="number" min={0} {...num("same_product_gap_days")} /></Field>
-          <Field label="Cooldown after ignored (days)"><input className="input" type="number" min={0} {...num("cooldown_after_ignored_days")} /></Field>
-          <Field label="Min uplift"><input className="input" type="number" min={0} max={1} step={0.005} {...num("min_uplift", true)} /></Field>
+          <Field label="Messages per customer / 30 days"><input className="input" type="number" min={0} {...num("max_messages_per_30d")} /></Field>
+          <Field label="Days before repeating a product"><input className="input" type="number" min={0} {...num("same_product_gap_days")} /></Field>
+          <Field label="Days to pause after Not now"><input className="input" type="number" min={0} {...num("cooldown_after_ignored_days")} /></Field>
+          <Field label="Minimum expected benefit"><input className="input" type="number" min={0} max={1} step={0.005} {...num("min_uplift", true)} /></Field>
         </div>
-        <Field label="Blocked trigger categories" hint="Comma separated. Triggers from these categories are never used.">
+        <Field label="Excluded data categories" hint="Comma separated. Never used for offers.">
           <input className="input" value={blocked} onChange={(e) => setBlocked(e.target.value)} />
         </Field>
         <div>
@@ -137,7 +137,6 @@ function PolicyEditor({ base, onSaved }: { base: Policy; onSaved: () => void }) 
           checked={draft.credit_requires_review}
           onChange={(v) => setDraft({ ...draft, credit_requires_review: v })}
           label="Credit products need a person to approve"
-          description="Recommended. Automated credit offers can have real consequences."
         />
         <ErrorNote error={sim.error ?? saveState.error} />
         <div className="row">
@@ -154,6 +153,7 @@ function PolicyEditor({ base, onSaved }: { base: Policy; onSaved: () => void }) 
 }
 
 function SimulationResult({ current, proposed }: { current: PolicySimulation; proposed: PolicySimulation }) {
+  const { technical } = useTechnical();
   const reasons = [...new Set([...Object.keys(current.by_reason), ...Object.keys(proposed.by_reason)])] as ReasonCode[];
   const delta = (a = 0, b = 0) => {
     const d = b - a;
@@ -162,7 +162,7 @@ function SimulationResult({ current, proposed }: { current: PolicySimulation; pr
   return (
     <div className="stack-sm">
       <div className="row-between">
-        <span className="label">Effect over {fmtNum(proposed.population)} customers</span>
+        <span className="label">Projected impact · {fmtNum(proposed.population)} customers</span>
         <Simulated />
       </div>
       <div className="table-wrap">
@@ -171,7 +171,7 @@ function SimulationResult({ current, proposed }: { current: PolicySimulation; pr
           <tbody>
             {(["send", "hold", "silent", "review"] as const).map((o) => (
               <tr key={o}>
-                <td><strong>{o}</strong></td>
+                <td><strong>{technical ? o : OUTCOME_LABEL[o]}</strong></td>
                 <td className="num">{fmtNum(current.counts[o])}</td>
                 <td className="num">{fmtNum(proposed.counts[o])}</td>
                 <td className="num">{delta(current.counts[o], proposed.counts[o])}</td>
@@ -179,7 +179,7 @@ function SimulationResult({ current, proposed }: { current: PolicySimulation; pr
             ))}
             {reasons.map((r) => (
               <tr key={r}>
-                <td><code className="small">{r}</code></td>
+                <td>{technical ? <code className="small">{r}</code> : <span className="small">{REASON_LABEL[r]}</span>}</td>
                 <td className="num muted">{fmtNum(current.by_reason[r] ?? 0)}</td>
                 <td className="num muted">{fmtNum(proposed.by_reason[r] ?? 0)}</td>
                 <td className="num">{delta(current.by_reason[r], proposed.by_reason[r])}</td>

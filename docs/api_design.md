@@ -402,7 +402,7 @@ Response: `{ "customer": Customer, "token": "demo_..." }`. Errors: `409 PHONE_TA
 
 #### `POST /auth/signin` (M)
 
-`{ "phone": "...", "password": "..." }` → same response. Error: `401 INVALID_CREDENTIALS`. Seed the four demo accounts listed in `apps/web/src/lib/personas.ts` (`DEMO_ACCOUNTS`).
+`{ "phone": "...", "password": "..." }` → same response. Error: `401 INVALID_CREDENTIALS`. Sign-in works for the seven demo customers in `simulator/population.py`, with phones `08010000001` to `08010000007` in this order: adaeze, musa, tunde, chiamaka, emeka, ngozi, halima. The password is `demo1234`. The web app's copy is `DEMO_CUSTOMERS` in `apps/web/src/lib/personas.ts`.
 
 #### `GET /customers/{ref}` (M)
 

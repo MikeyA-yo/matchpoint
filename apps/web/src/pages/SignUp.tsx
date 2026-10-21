@@ -3,10 +3,9 @@ import { Link, useNavigate } from "react-router";
 import { Button, ErrorNote, Field } from "../components/ui";
 import { useApi, useSession } from "../lib/context";
 import { useAction } from "../lib/hooks";
-import { PERSONAS } from "../lib/personas";
 import { CHANNEL_LABEL } from "../lib/format";
+import { PERSONAS } from "../lib/personas";
 import { CHANNELS, type Channel, type Persona } from "../lib/types";
-
 
 export function SignUp() {
   const api = useApi();
@@ -18,7 +17,7 @@ export function SignUp() {
   const [persona, setPersona] = useState<Persona>("salaried_parent");
   // Silence is not consent: everything starts off
   const [offers, setOffers] = useState(false);
-  const [channels, setChannels] = useState<Record<Channel, boolean>>({ app: false, whatsapp: false, sms: false, email: false });
+  const [channels, setChannels] = useState<Record<Channel, boolean>>({ app: false, whatsapp: false, sms: false, email: false, ussd: false });
   const [signUp, state] = useAction(api.signUp);
 
   async function onSubmit(e: FormEvent) {
@@ -33,10 +32,7 @@ export function SignUp() {
   return (
     <main className="container">
       <div className="auth stack">
-        <div>
-          <h2>Create a demo account</h2>
-          <p className="muted">We'll fill your demo account with sample transactions that match the profile you pick.</p>
-        </div>
+        <h2>Open an account</h2>
         <section className="card">
           <form className="card-body stack" onSubmit={onSubmit}>
             <Field label="Full name">
@@ -45,12 +41,13 @@ export function SignUp() {
             <Field label="Phone number" hint="Used to sign in. 10 to 14 digits.">
               <input className="input" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="080…" required />
             </Field>
-            <Field label="Password" hint="At least 6 characters. Demo only, don't reuse a real one.">
+            <Field label="Password" hint="At least 6 characters.">
               <input className="input" type="password" autoComplete="new-password" minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} required />
             </Field>
 
             <fieldset className="stack-sm" style={{ border: 0, padding: 0, margin: 0 }}>
-              <legend className="label" style={{ marginBottom: 6 }}>Which sounds most like you?</legend>
+              <legend className="label" style={{ marginBottom: 6 }}>Account profile</legend>
+              <span className="hint">Sandbox accounts come with sample transactions for the profile you choose.</span>
               {(Object.keys(PERSONAS) as Persona[]).map((p) => (
                 <label key={p} className="persona">
                   <input type="radio" name="persona" value={p} checked={persona === p} onChange={() => setPersona(p)} />
@@ -61,15 +58,15 @@ export function SignUp() {
             </fieldset>
 
             <fieldset className="stack-sm" style={{ border: 0, padding: 0, margin: 0 }}>
-              <legend className="label" style={{ marginBottom: 6 }}>Consent</legend>
+              <legend className="label" style={{ marginBottom: 6 }}>Marketing preferences</legend>
               <label className="checkbox">
                 <input type="checkbox" checked={offers} onChange={(e) => setOffers(e.target.checked)} />
                 <span>
-                  Send me personalised offers based on how I use my account
-                  <span className="hint" style={{ display: "block" }}>Optional. You can turn this off at any time, and every message has a Stop offers button.</span>
+                  Send me personalised offers based on my account activity
+                  <span className="hint" style={{ display: "block" }}>Optional. You can change this any time in Privacy.</span>
                 </span>
               </label>
-              <div className="hint">Channels you're happy to hear from us on:</div>
+              <div className="hint">Contact me by</div>
               <div className="row" style={{ gap: 16 }}>
                 {CHANNELS.map((ch) => (
                   <label key={ch} className="checkbox">

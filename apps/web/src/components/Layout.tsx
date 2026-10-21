@@ -17,9 +17,8 @@ export function Layout() {
           MATCHPOINT
         </Link>
         <nav className="nav">
-          <NavLink to="/" end>Home</NavLink>
-          <NavLink to="/app">Customer</NavLink>
-          <NavLink to="/console">Bank console</NavLink>
+          <NavLink to="/app">Customer app</NavLink>
+          <NavLink to="/console">Console</NavLink>
         </nav>
         <div className="topbar-right">
           {technical && (
@@ -27,16 +26,20 @@ export function Layout() {
               type="button"
               className={`mode-toggle ${mode}`}
               onClick={() => setMode(mode === "mock" ? "live" : "mock")}
-              title={mode === "mock" ? "Using the in-browser mock backend. Click to use the live API." : "Using the live API. Click to use the mock backend."}
+              title={
+                mode === "mock"
+                  ? "Using the in-browser mock backend. Click to use the live API."
+                  : "Using the live API where an endpoint exists, the mock elsewhere. Click to use only the mock."
+              }
             >
               <span className="dot" aria-hidden />
-              {mode === "mock" ? "Mock data" : "Live API"}
+              {mode === "mock" ? "Mock API" : "Live API"}
             </button>
           )}
-          <label className="tech-toggle" title="Show endpoints, IDs and decision traces">
+          <label className="tech-toggle" title="Show endpoints, IDs, traces and API mode">
             <input type="checkbox" checked={technical} onChange={(e) => setTechnical(e.target.checked)} />
             <span className="switch-track" aria-hidden />
-            <span>Technical details</span>
+            <span>Developer view</span>
           </label>
           {session ? (
             <>
@@ -55,7 +58,7 @@ export function Layout() {
           ) : (
             <>
               <Link to="/signin" className="btn btn-ghost btn-sm">Sign in</Link>
-              <Link to="/signup" className="btn btn-primary btn-sm">Sign up</Link>
+              <Link to="/signup" className="btn btn-primary btn-sm">Open account</Link>
             </>
           )}
         </div>

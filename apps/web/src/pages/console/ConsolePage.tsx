@@ -1,17 +1,20 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router";
-import { ApiProvider, useApi } from "../../lib/context";
+import { Badge } from "../../components/ui";
+import { onServedChange, servedEndpoints } from "../../lib/api";
+import { ApiProvider, useApi, useTechnical } from "../../lib/context";
+import { getMode } from "../../lib/mode";
 import { humanize } from "../../lib/format";
 import { useQuery } from "../../lib/hooks";
 import { KEYS, load, save } from "../../lib/storage";
 import { STAFF_ROLES, type Role } from "../../lib/types";
 
 const SECTIONS: { group: string; links: [to: string, label: string][] }[] = [
-  { group: "Overview", links: [["/console", "Metrics"]] },
+  { group: "Overview", links: [["/console", "Overview"]] },
   {
     group: "Decisions",
     links: [
-      ["/console/decisions", "Silence feed"],
+      ["/console/decisions", "Decision log"],
       ["/console/review", "Review queue"],
       ["/console/run", "Run decisions"],
     ],
@@ -28,14 +31,14 @@ const SECTIONS: { group: string; links: [to: string, label: string][] }[] = [
     group: "Evidence",
     links: [
       ["/console/experiments", "Experiments"],
-      ["/console/model", "Uplift model"],
+      ["/console/model", "Targeting model"],
     ],
   },
   {
-    group: "Demo control",
+    group: "Sandbox",
     links: [
       ["/console/simulator", "Simulator"],
-      ["/console/events", "Live events"],
+      ["/console/events", "Event stream"],
       ["/console/audit", "Audit log"],
     ],
   },
@@ -62,14 +65,14 @@ export function ConsolePage() {
               ))}
             </div>
           ))}
-          <div className="sidebar-group">API</div>
+          <div className="sidebar-group">Status</div>
           <Health />
         </aside>
         <div className="console-main">
           <div className="row-between" style={{ marginBottom: 20 }}>
-            <span className="small muted">Bank console · all figures simulated</span>
+            <span className="env-tag">Sandbox</span>
             <label className="role-picker small">
-              <span className="muted">Acting as</span>
+              <span className="muted">Role</span>
               <select className="select input-sm" style={{ width: "auto" }} value={role} onChange={(e) => changeRole(e.target.value as Role)}>
                 {STAFF_ROLES.map((r) => (
                   <option key={r} value={r}>{humanize(r)}</option>
@@ -86,13 +89,31 @@ export function ConsolePage() {
 
 function Health() {
   const api = useApi();
+  const { technical } = useTechnical();
   const health = useQuery(() => api.health(), []);
+  const [, rerender] = useState(0);
+  useEffect(() => onServedChange(() => rerender((n) => n + 1)), []);
   const ok = health.data?.status === "ok";
+  const endpoints = servedEndpoints();
+
   return (
-    <div className="row small" style={{ padding: "4px 10px" }} title="GET /health">
-      <span className="live-dot" style={ok ? undefined : { background: "var(--red)", animation: "none" }} aria-hidden />
-      <span className="muted">{health.loading ? "Checking…" : ok ? `Healthy (${health.data?.env})` : "Unreachable"}</span>
-    </div>
+    <>
+      <div className="row small" style={{ padding: "4px 10px" }}>
+        <span className="live-dot" style={ok ? undefined : { background: "var(--red)", animation: "none" }} aria-hidden />
+        <span className="muted">{health.loading ? "Checking…" : ok ? (technical ? `API healthy (${health.data?.env})` : "Operational") : "API unreachable"}</span>
+      </div>
+      {technical && getMode() === "live" && endpoints.length > 0 && (
+        <div className="small" style={{ padding: "6px 10px" }}>
+          <div className="faint" style={{ marginBottom: 4 }}>Used this session</div>
+          {endpoints.map(([route, by]) => (
+            <div key={route} className="row" style={{ gap: 6, flexWrap: "nowrap" }} title={by === "live" ? "Answered by the API" : "Not built yet; answered by the mock"}>
+              <Badge tone={by === "live" ? "green" : "grey"}>{by}</Badge>
+              <code style={{ fontSize: 10.5, whiteSpace: "nowrap" }}>{route}</code>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 

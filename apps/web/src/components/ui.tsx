@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import type { ApiError } from "../lib/api";
 import { useTechnical } from "../lib/context";
-import { REASONS, type Outcome, type ReasonCode } from "../lib/types";
+import { OUTCOME_LABEL, REASON_LABEL, REASONS, type Outcome, type ReasonCode } from "../lib/types";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
@@ -59,8 +59,11 @@ export function Card({
   );
 }
 
+/** An API route label. Only shown in Developer view. */
 export function Endpoint({ value }: { value: string }) {
+  const { technical } = useTechnical();
   const [method, ...path] = value.split(" ");
+  if (!technical) return null;
   return (
     <span className="endpoint">
       <b>{method}</b> {path.join(" ")}
@@ -77,11 +80,15 @@ export function Badge({ tone = "grey", children }: { tone?: Tone; children: Reac
 const OUTCOME_TONE: Record<Outcome, Tone> = { send: "green", hold: "amber", silent: "grey", review: "blue" };
 
 export function OutcomeBadge({ outcome }: { outcome: Outcome }) {
-  return <Badge tone={OUTCOME_TONE[outcome]}>{outcome}</Badge>;
+  const { technical } = useTechnical();
+  return <Badge tone={OUTCOME_TONE[outcome]}>{technical ? outcome : OUTCOME_LABEL[outcome]}</Badge>;
 }
 
+/** A reason code in Developer view, a short plain label otherwise. */
 export function ReasonChip({ code }: { code: ReasonCode }) {
+  const { technical } = useTechnical();
   const r = REASONS[code];
+  if (!technical) return <span className="reason">{REASON_LABEL[code] ?? code}</span>;
   return (
     <span className="chip" title={r ? `${r.meaning} → ${r.effect}` : code}>
       {code}
@@ -92,7 +99,7 @@ export function ReasonChip({ code }: { code: ReasonCode }) {
 export function Simulated() {
   return (
     <Badge tone="grey">
-      <span aria-hidden>◇</span> simulated
+      <span aria-hidden>◇</span> Simulated
     </Badge>
   );
 }

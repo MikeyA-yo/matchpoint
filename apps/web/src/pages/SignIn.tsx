@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { Button, ErrorNote, Field } from "../components/ui";
 import { useApi, useSession } from "../lib/context";
 import { useAction } from "../lib/hooks";
-import { DEMO_ACCOUNTS, PERSONAS } from "../lib/personas";
+import { DEMO_CUSTOMERS, DEMO_PASSWORD } from "../lib/personas";
 
 export function SignIn() {
   const api = useApi();
@@ -30,10 +30,7 @@ export function SignIn() {
   return (
     <main className="container">
       <div className="auth stack">
-        <div>
-          <h2>Sign in</h2>
-          <p className="muted">Pick a sample customer below, or use the demo account you created.</p>
-        </div>
+        <h2>Sign in</h2>
         <section className="card">
           <form className="card-body stack" onSubmit={onSubmit}>
             <Field label="Phone number">
@@ -47,15 +44,15 @@ export function SignIn() {
               Sign in
             </Button>
             <p className="small muted" style={{ textAlign: "center" }}>
-              New here? <Link to="/signup">Create a demo account</Link>
+              No account? <Link to="/signup">Open one</Link>
             </p>
           </form>
         </section>
 
         <section className="card">
           <div className="card-body stack-sm">
-            <div className="label">Sample customers</div>
-            {DEMO_ACCOUNTS.map((a) => (
+            <div className="label">Sandbox accounts</div>
+            {DEMO_CUSTOMERS.map((a) => (
               <button
                 key={a.phone}
                 type="button"
@@ -63,14 +60,15 @@ export function SignIn() {
                 disabled={state.loading}
                 onClick={() => {
                   setPhone(a.phone);
-                  setPassword(a.password);
-                  submit(a.phone, a.password);
+                  setPassword(DEMO_PASSWORD);
+                  submit(a.phone, DEMO_PASSWORD);
                 }}
               >
                 <span>
                   <strong>{a.name}</strong>
-                  <span className="small muted" style={{ display: "block" }}>{PERSONAS[a.persona].label} · {a.note}</span>
+                  <span className="small muted" style={{ display: "block" }}>{a.note}</span>
                 </span>
+                <span className="small faint" aria-hidden>Sign in →</span>
               </button>
             ))}
           </div>

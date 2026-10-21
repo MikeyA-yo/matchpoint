@@ -1,26 +1,27 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Empty, ErrorNote, Loading } from "../../components/ui";
 import { useApi } from "../../lib/context";
-import { describeDecision, VIA, type PlainDecision } from "../../lib/describe";
-import { fmtDay, shiftDays } from "../../lib/format";
+import { describeDecision, type PlainDecision } from "../../lib/describe";
+import { CHANNEL_LABEL, fmtDay, fmtTime, shiftDays } from "../../lib/format";
 import { useAction, useQuery, useStream } from "../../lib/hooks";
 import { useProductNames } from "../../lib/products";
 import { load, save } from "../../lib/storage";
 import { CHANNELS, type Customer, type Decision, type Pattern } from "../../lib/types";
 
-const LIFE_EVENTS: { pattern: Pattern; label: string }[] = [
-  { pattern: "salary_pattern", label: "Salary paid" },
-  { pattern: "fee_season", label: "School fees due" },
-  { pattern: "sme_growth", label: "Business growing" },
+const EVENTS: { pattern: Pattern; label: string }[] = [
+  { pattern: "salary_pattern", label: "Salary credited" },
+  { pattern: "fee_season", label: "School fees paid" },
+  { pattern: "sme_growth", label: "POS sales up" },
 ];
 
-/** What a customer (or a judge) sees next to the phone: plain language, no IDs or codes. */
+/** Account summary and message log next to the phone. */
 export function CustomerPanel({ customer }: { customer: Customer }) {
   const api = useApi();
   const ref = customer.customer_ref;
   const productName = useProductNames();
   const profile = useQuery(() => api.customer(ref), [ref]);
   const consent = useQuery(() => api.consent(ref), [ref]);
+  const rewards = useQuery(() => api.rewards(ref), [ref]);
   const decisions = useQuery(() => api.decisions({ customer_ref: ref, limit: 50 }), [ref]);
 
   useStream((e) => {
@@ -28,49 +29,38 @@ export function CustomerPanel({ customer }: { customer: Customer }) {
     if (e.type === "decision_created" || e.type === "outcome_recorded") decisions.reload();
     if (e.type === "outcome_recorded") profile.reload();
     if (e.type === "consent_changed") consent.reload();
+    if (e.type === "points_awarded" || e.type === "points_redeemed") rewards.reload();
   });
 
   const holdings = profile.data?.holdings ?? customer.holdings;
   const c = consent.data;
-  const channels = c ? CHANNELS.filter((ch) => c.channels[ch]).map((ch) => VIA[ch]) : [];
-  const activity = (decisions.data?.items ?? []).filter((d) => d.mode === "live");
+  const channels = c ? CHANNELS.filter((ch) => c.channels[ch]).map((ch) => CHANNEL_LABEL[ch]) : [];
+  const log = (decisions.data?.items ?? []).filter((d) => d.mode === "live");
 
   return (
     <div className="stack">
-      <TryIt customerRef={ref} />
-
-      <Card title="Your account">
-        <div className="grid-2">
-          <div>
-            <div className="label">Your products</div>
-            <ul className="plain-list">
-              {holdings.map((h) => <li key={h}>{productName(h)}</li>)}
-            </ul>
-          </div>
-          <div>
-            <div className="label">Your choices</div>
-            {c ? (
-              <ul className="plain-list">
-                <li>Personalised offers: <strong>{c.personalised_offers ? "on" : "off"}</strong></li>
-                <li>{channels.length ? `We can reach you ${channels.join(" and ")}` : "You haven't chosen how we can reach you"}</li>
-              </ul>
-            ) : (
-              <p className="muted small">Loading…</p>
-            )}
-            <p className="small faint" style={{ marginTop: 6 }}>Change these in Privacy on your phone.</p>
-          </div>
-        </div>
+      <Card title="Account">
+        <dl className="kv">
+          <dt>Products</dt>
+          <dd>{holdings.map(productName).join(", ")}</dd>
+          <dt>Personalised offers</dt>
+          <dd>{c ? (c.personalised_offers ? "On" : "Off") : "…"}</dd>
+          <dt>Contact by</dt>
+          <dd>{c ? channels.join(", ") || "None" : "…"}</dd>
+          <dt>Rewards</dt>
+          <dd>{rewards.data ? `${rewards.data.balance.toLocaleString("en-NG")} points · ${rewards.data.tier}` : "…"}</dd>
+        </dl>
       </Card>
 
-      <Card title="What MATCHPOINT did for you" sub="Including the times it chose not to message you. That's on purpose.">
+      <Card title="Message log" actions={log.length > 0 && <span className="small faint">{log.length}</span>} bodyClass="">
         <ErrorNote error={decisions.error} />
         {decisions.loading && !decisions.data ? (
           <Loading />
-        ) : !activity.length ? (
-          <Empty title="Nothing yet">Press "Check for offers" above to see what happens.</Empty>
+        ) : !log.length ? (
+          <Empty title="No activity yet" />
         ) : (
           <ul className="activity">
-            {activity.map((d) => <ActivityItem key={d.id} d={d} plain={describeDecision(d, productName(d.product_id))} />)}
+            {log.map((d) => <LogItem key={d.id} d={d} plain={describeDecision(d, productName(d.product_id))} />)}
           </ul>
         )}
       </Card>
@@ -78,28 +68,28 @@ export function CustomerPanel({ customer }: { customer: Customer }) {
   );
 }
 
-function ActivityItem({ d, plain }: { d: Decision; plain: PlainDecision }) {
+function LogItem({ d, plain }: { d: Decision; plain: PlainDecision }) {
   return (
     <li className={`activity-item tone-${plain.tone}`}>
       <span className="activity-dot" aria-hidden />
-      <div>
-        <div className="row-between">
-          <strong>{plain.headline}</strong>
-          <span className="small faint">{fmtDay(d.as_of)}</span>
-        </div>
-        <p className="muted">{plain.text}</p>
+      <div className="row-between" style={{ flexWrap: "nowrap", alignItems: "baseline" }}>
+        <span>
+          <strong>{plain.status}</strong> <span className="muted">· {plain.detail}</span>
+        </span>
+        <span className="small faint" style={{ whiteSpace: "nowrap" }}>{fmtDay(d.as_of)}</span>
       </div>
     </li>
   );
 }
 
-function TryIt({ customerRef }: { customerRef: string }) {
+/** Test-mode toolbar: move the simulated clock, run decisioning, simulate account events. */
+export function SandboxBar({ customerRef }: { customerRef: string }) {
   const api = useApi();
   const productName = useProductNames();
   const sim = useQuery(() => api.simState(), []);
   const timeKey = `matchpoint.demoTime.${customerRef}`;
   const [time, setTimeState] = useState<string | null>(() => load<string | null>(timeKey, null));
-  const [last, setLast] = useState<{ d: Decision; event?: string } | null>(null);
+  const [last, setLast] = useState<Decision | null>(null);
   const [start, startState] = useAction(api.simStart);
   const [run, runState] = useAction(async (at: string, event?: Pattern) => {
     if (event) await api.simInject(event, customerRef);
@@ -117,65 +107,66 @@ function TryIt({ customerRef }: { customerRef: string }) {
 
   const go = async (at: string, event?: Pattern) => {
     const d = await run(at, event);
-    if (d) setLast({ d, event: LIFE_EVENTS.find((e) => e.pattern === event)?.label });
+    if (d) setLast(d);
   };
 
-  if (sim.loading && !sim.data) return <Card title="Try it out"><Loading /></Card>;
-  if (sim.data && !sim.data.running) {
-    return (
-      <Card title="Try it out">
-        <div className="row-between">
-          <p className="muted">The demo is paused.</p>
-          <Button variant="primary" loading={startState.loading} onClick={async () => (await start({ seed: 42, n_customers: 5000, days: 120, scenario: "baseline" })) && sim.reload()}>
-            Start the demo
-          </Button>
-        </div>
-        <ErrorNote error={startState.error ?? sim.error} />
-      </Card>
-    );
-  }
-
-  const plain = last ? describeDecision(last.d, productName(last.d.product_id)) : null;
+  const paused = sim.data && !sim.data.running;
+  const plain = last ? describeDecision(last, productName(last.product_id)) : null;
+  const busy = !time || runState.loading;
 
   return (
-    <Card title="Try it out" sub="Move time forward or add something to your account, then see what MATCHPOINT does.">
-      <div className="stack">
-        <div className="row-between">
-          <span className="small muted">Demo date <strong style={{ color: "var(--text)" }}>{time ? fmtDay(time, true) : "…"}</strong></span>
-        </div>
-        <div className="row">
-          <Button variant="primary" disabled={!time} loading={runState.loading} onClick={() => time && go(time)}>
-            Check for offers
+    <div className="sandbox-bar" role="toolbar" aria-label="Sandbox controls">
+      <span className="env-tag">Sandbox</span>
+      {paused ? (
+        <>
+          <span className="small muted">Simulation stopped</span>
+          <Button size="sm" variant="primary" loading={startState.loading} onClick={async () => (await start({ seed: 42, n_customers: 5000, days: 120, scenario: "baseline" })) && sim.reload()}>
+            Start
           </Button>
-          <Button
-            disabled={!time || runState.loading}
-            onClick={() => {
-              if (!time) return;
-              const next = shiftDays(time, 7);
-              setTime(next);
-              go(next);
-            }}
-          >
-            Skip ahead a week
-          </Button>
-        </div>
-        <div className="row small">
-          <span className="muted">Something happens:</span>
-          {LIFE_EVENTS.map((e) => (
-            <button key={e.pattern} type="button" className="event-chip" disabled={!time || runState.loading} onClick={() => time && go(time, e.pattern)}>
-              {e.label}
-            </button>
-          ))}
-        </div>
-        <ErrorNote error={runState.error} />
-        {plain && (
-          <div className={`result tone-${plain.tone}`} role="status">
-            <strong>{last?.event ? `${last.event}. ${plain.headline}` : plain.headline}</strong>
-            <span>{plain.text}</span>
-            {plain.tone === "sent" && <span className="small">Have a look at the phone.</span>}
+        </>
+      ) : (
+        <>
+          <span className="sandbox-date">{time ? `${fmtDay(time, true)}, ${fmtTime(time)}` : "…"}</span>
+          <div className="row" style={{ gap: 6 }}>
+            <Button size="sm" variant="primary" disabled={!time} loading={runState.loading} onClick={() => time && go(time)}>
+              Run decisioning
+            </Button>
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                if (!time) return;
+                const next = shiftDays(time, 7);
+                setTime(next);
+                go(next);
+              }}
+            >
+              +1 week
+            </Button>
+            <select
+              className="select input-sm"
+              style={{ width: "auto" }}
+              value=""
+              disabled={busy}
+              aria-label="Simulate an account event"
+              onChange={(e) => time && e.target.value && go(time, e.target.value as Pattern)}
+            >
+              <option value="">Simulate event…</option>
+              {EVENTS.map((ev) => <option key={ev.pattern} value={ev.pattern}>{ev.label}</option>)}
+            </select>
           </div>
-        )}
-      </div>
-    </Card>
+        </>
+      )}
+      <span className="spacer" />
+      {(runState.error || startState.error || sim.error) && (
+        <span className="small" style={{ color: "var(--red)" }}>{(runState.error ?? startState.error ?? sim.error)?.message}</span>
+      )}
+      {plain && !runState.error && (
+        <span className={`sandbox-result tone-${plain.tone}`} role="status">
+          <span className="activity-dot" aria-hidden />
+          <strong>{plain.status}</strong> <span className="muted">{plain.detail}</span>
+        </span>
+      )}
+    </div>
   );
 }

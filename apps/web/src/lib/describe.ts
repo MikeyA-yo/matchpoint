@@ -1,58 +1,72 @@
-import { fmtTime } from "./format";
-import type { Channel, Decision, ReasonCode } from "./types";
+import { CHANNEL_LABEL, fmtTime, humanize } from "./format";
+import { segmentLabel } from "./personas";
+import type { Channel, Decision, EligibilityRule, ReasonCode } from "./types";
 
-export const VIA: Record<Channel, string> = { app: "in the app", whatsapp: "on WhatsApp", sms: "by SMS", email: "by email" };
+export const VIA: Record<Channel, string> = {
+  app: "in the app",
+  whatsapp: "on WhatsApp",
+  sms: "by SMS",
+  email: "by email",
+  ussd: "by USSD",
+};
 
 export interface PlainDecision {
-  headline: string;
-  text: string;
+  /** One word: Sent, Held, Not sent, In review, Declined */
+  status: string;
+  /** Short reason or destination, no codes */
+  detail: string;
   tone: "sent" | "check" | "held" | "quiet";
 }
 
-/** Turns a decision into what a customer would understand, without codes or jargon. */
+const HELD: Partial<Record<ReasonCode, string>> = {
+  CAP_30D: "Monthly message limit reached",
+  ATTENTION_BUDGET: "Monthly message limit reached",
+  SAME_PRODUCT_60D: "Already offered in the last 60 days",
+  COOLDOWN_IGNORED: "You chose Not now",
+  LOW_UPLIFT: "Low expected benefit",
+  NO_CHANNEL_CONSENT: "No contact channel allowed",
+  SENSITIVE_TRIGGER: "Based on excluded spending",
+  GOVERNOR_LOST: "Another offer took priority",
+  GUARDRAIL_BLOCKED: "Message failed content check",
+};
+
+const NOT_SENT: Partial<Record<ReasonCode, string>> = {
+  NO_CONSENT: "Personalised offers are off",
+  OPTED_OUT: "Offers paused on this account",
+  NO_MATCH: "No suitable product",
+};
+
+/** A decision as a short log line: status, plus product and reason in plain words. */
 export function describeDecision(d: Decision, productName: string): PlainDecision {
-  const product = productName ? productName.toLowerCase() : "a product";
   const reason: ReasonCode = d.reasons.find((r) => r !== "OK") ?? d.reasons[0];
+  const withProduct = (text: string) => (productName ? `${productName} · ${text}` : text);
 
   if (d.outcome === "send") {
-    const via = d.channel ? ` ${VIA[d.channel]}` : "";
-    const timing = d.scheduled_for ? ` We timed it for ${fmtTime(d.scheduled_for)} so it wouldn't disturb you at night.` : "";
-    return { headline: "Offer sent", text: `We sent you an offer for a ${product}${via}.${timing}`, tone: "sent" };
+    const when = d.scheduled_for ? `, scheduled ${fmtTime(d.scheduled_for)}` : "";
+    return { status: "Sent", detail: withProduct(`${d.channel ? CHANNEL_LABEL[d.channel] : "Sent"}${when}`), tone: "sent" };
   }
-
   if (d.outcome === "review") {
-    if (d.review?.action === "approved") {
-      return { headline: "Offer sent after a check", text: `Our team checked the ${product} offer and sent it to you.`, tone: "sent" };
-    }
-    if (d.review?.action === "rejected") {
-      return { headline: "Offer not sent", text: `Our team checked the ${product} offer and decided it wasn't right for you.`, tone: "quiet" };
-    }
-    return {
-      headline: "Being checked first",
-      text: `A ${product} might suit you. Because it's a loan, a person on our team checks it before you hear about it.`,
-      tone: "check",
-    };
+    if (d.review?.action === "approved") return { status: "Sent", detail: withProduct("approved by staff"), tone: "sent" };
+    if (d.review?.action === "rejected") return { status: "Declined", detail: withProduct("declined by staff"), tone: "quiet" };
+    return { status: "In review", detail: withProduct("awaiting staff approval"), tone: "check" };
   }
-
-  const held: Partial<Record<ReasonCode, string>> = {
-    CAP_30D: "We held back an offer so you don't get too many messages in one month.",
-    ATTENTION_BUDGET: "We held back an offer so you don't get too many messages in one month.",
-    SAME_PRODUCT_60D: `You heard about the ${product} recently, so we didn't repeat ourselves.`,
-    COOLDOWN_IGNORED: `You said "not now" to the ${product}, so we're giving it a rest.`,
-    LOW_UPLIFT: `We found a ${product}, but it wasn't likely to make enough difference for you to be worth a message.`,
-    NO_CHANNEL_CONSENT: "We had something for you, but you haven't chosen a way for us to reach you.",
-    SENSITIVE_TRIGGER: "Some of your spending is private, and we never use it for offers.",
-    GOVERNOR_LOST: "Another offer was more useful to you, so we only sent that one.",
-    GUARDRAIL_BLOCKED: "We stopped a message that didn't meet our standards.",
-  };
-  const quiet: Partial<Record<ReasonCode, string>> = {
-    NO_CONSENT: "You haven't agreed to personalised offers, so we didn't look at your activity.",
-    OPTED_OUT: "You turned off offers, so we didn't look at your activity.",
-    NO_MATCH: "Nothing we offer fits you right now, so we didn't message you.",
-  };
-
   if (d.outcome === "hold") {
-    return { headline: "Held back", text: held[reason] ?? "We decided not to message you this time.", tone: "held" };
+    const text = HELD[reason] ?? "Held";
+    // Reasons about the customer as a whole read better without a product name
+    const productless = reason === "CAP_30D" || reason === "ATTENTION_BUDGET" || reason === "NO_CHANNEL_CONSENT";
+    return { status: "Held", detail: productless ? text : withProduct(text.charAt(0).toLowerCase() + text.slice(1)), tone: "held" };
   }
-  return { headline: "Stayed quiet", text: quiet[reason] ?? "We didn't message you.", tone: "quiet" };
+  return { status: "Not sent", detail: NOT_SENT[reason] ?? "No message", tone: "quiet" };
+}
+
+/** An eligibility rule as staff would say it, e.g. "Age 18+" or "Doesn't already have Personal loan". */
+export function describeRule(r: EligibilityRule, productName: (id: string) => string): string {
+  const v = r.value;
+  if (r.fact === "age" && r.op === ">=") return `Age ${v}+`;
+  if (r.fact === "age" && r.op === "<=") return `Age up to ${v}`;
+  if (r.fact === "holds" && r.op === "not_contains") return `Doesn't already have ${productName(String(v))}`;
+  if (r.fact === "holds" && r.op === "contains") return `Has ${productName(String(v))}`;
+  if (r.fact === "segment" && r.op === "in" && Array.isArray(v)) return `${v.map((s) => segmentLabel(String(s))).join(" or ")} customers`;
+  if (r.fact === "segment" && r.op === "==") return `${segmentLabel(String(v))} customers`;
+  return `${humanize(r.fact)} ${r.op} ${JSON.stringify(v)}`;
 }

@@ -22,6 +22,6 @@ export const KEYS = {
   session: "matchpoint.session",
   mode: "matchpoint.dataMode",
   role: "matchpoint.consoleRole",
-  mockDb: "matchpoint.mockDb.v2",
+  mockDb: "matchpoint.mockDb.v3",
   technical: "matchpoint.technicalDetails",
 } as const;

@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { DecisionDrawer, DecisionView } from "../../components/DecisionView";
 import { Badge, Button, Card, Empty, ErrorNote, Field, Loading, OutcomeBadge, ReasonChip, Segmented, Simulated } from "../../components/ui";
-import { useApi, useRole } from "../../lib/context";
-import { fmtDateTime, fromLocalInput, humanize } from "../../lib/format";
+import { useApi, useRole, useTechnical } from "../../lib/context";
+import { CHANNEL_LABEL, fmtDateTime, fromLocalInput, humanize, toLocalInput } from "../../lib/format";
 import { useAction, useQuery, useStream } from "../../lib/hooks";
-import { REASONS, type Decision, type DecisionFilters, type EvalMode, type Outcome, type ReasonCode } from "../../lib/types";
+import { useProductNames } from "../../lib/products";
+import { OUTCOME_LABEL, REASON_LABEL, REASONS, type Decision, type DecisionFilters, type EvalMode, type Outcome, type ReasonCode } from "../../lib/types";
 import { ConsoleHead } from "./ConsolePage";
 
 const OUTCOMES: Outcome[] = ["send", "hold", "silent", "review"];
 
 function DecisionTable({ items, onOpen }: { items: Decision[]; onOpen: (id: string) => void }) {
+  const productName = useProductNames();
   return (
     <div className="table-wrap">
       <table className="table">
@@ -23,8 +25,8 @@ function DecisionTable({ items, onOpen }: { items: Decision[]; onOpen: (id: stri
               <td><code>{d.customer_ref}</code></td>
               <td><OutcomeBadge outcome={d.outcome} /></td>
               <td><div className="row">{d.reasons.map((r) => <ReasonChip key={r} code={r} />)}</div></td>
-              <td className="small">{d.product_id ? humanize(d.product_id) : "—"}</td>
-              <td className="small">{d.channel ?? "—"}</td>
+              <td className="small">{productName(d.product_id) || "—"}</td>
+              <td className="small">{d.channel ? CHANNEL_LABEL[d.channel] : "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -37,6 +39,7 @@ function DecisionTable({ items, onOpen }: { items: Decision[]; onOpen: (id: stri
 
 export function SilenceFeed() {
   const api = useApi();
+  const { technical } = useTechnical();
   const [filters, setFilters] = useState<DecisionFilters>({});
   const [extra, setExtra] = useState<Decision[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -60,48 +63,38 @@ export function SilenceFeed() {
   const set = <K extends keyof DecisionFilters>(k: K, v: DecisionFilters[K] | "") =>
     setFilters((f) => ({ ...f, [k]: v || undefined }));
   const items = [...(feed.data?.items ?? []), ...extra];
+  const filtered = Object.values(filters).some(Boolean);
 
   return (
     <>
-      <ConsoleHead title="Silence feed">Every decision, including the messages MATCHPOINT chose not to send, and why.</ConsoleHead>
-      <Card
-        title="Decisions"
-        endpoint={["GET /decisions", "GET /decisions/{id}"]}
-        actions={<><Simulated /><Button size="sm" variant="ghost" onClick={feed.reload}>Refresh</Button></>}
-        bodyClass=""
-      >
-        <div className="card-body grid-4" style={{ borderBottom: "1px solid var(--border)" }}>
-          <Field label="Outcome">
-            <select className="select" value={filters.outcome ?? ""} onChange={(e) => set("outcome", e.target.value as Outcome)}>
-              <option value="">Any</option>
-              {OUTCOMES.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </Field>
-          <Field label="Reason">
-            <select className="select" value={filters.reason ?? ""} onChange={(e) => set("reason", e.target.value as ReasonCode)}>
-              <option value="">Any</option>
-              {(Object.keys(REASONS) as ReasonCode[]).map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          <Field label="Product">
-            <select className="select" value={filters.product_id ?? ""} onChange={(e) => set("product_id", e.target.value)}>
-              <option value="">Any</option>
-              {products.data?.items.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Customer ref">
-            <input className="input" placeholder="cus_…" value={filters.customer_ref ?? ""} onChange={(e) => set("customer_ref", e.target.value.trim())} />
-          </Field>
-          <Field label="Since">
-            <input className="input" type="datetime-local" onChange={(e) => set("since", fromLocalInput(e.target.value))} />
-          </Field>
+      <ConsoleHead title="Decision log" />
+      <Card endpoint={["GET /decisions", "GET /decisions/{id}"]} bodyClass="">
+        <div className="filter-bar">
+          <select className="select input-sm" aria-label="Outcome" value={filters.outcome ?? ""} onChange={(e) => set("outcome", e.target.value as Outcome)}>
+            <option value="">All outcomes</option>
+            {OUTCOMES.map((o) => <option key={o} value={o}>{technical ? o : OUTCOME_LABEL[o]}</option>)}
+          </select>
+          <select className="select input-sm" aria-label="Reason" value={filters.reason ?? ""} onChange={(e) => set("reason", e.target.value as ReasonCode)}>
+            <option value="">All reasons</option>
+            {(Object.keys(REASONS) as ReasonCode[]).map((r) => <option key={r} value={r}>{technical ? r : REASON_LABEL[r]}</option>)}
+          </select>
+          <select className="select input-sm" aria-label="Product" value={filters.product_id ?? ""} onChange={(e) => set("product_id", e.target.value)}>
+            <option value="">All products</option>
+            {products.data?.items.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <input className="input input-sm" aria-label="Customer ref" placeholder="Customer ref" value={filters.customer_ref ?? ""} onChange={(e) => set("customer_ref", e.target.value.trim())} />
+          <input className="input input-sm" aria-label="Since" type="datetime-local" value={toLocalInput(filters.since)} onChange={(e) => set("since", fromLocalInput(e.target.value))} />
+          {filtered && <Button size="sm" variant="ghost" onClick={() => setFilters({})}>Clear</Button>}
+          <span className="spacer" />
+          <Simulated />
+          <Button size="sm" variant="ghost" onClick={feed.reload}>Refresh</Button>
         </div>
         {feed.error ? (
           <div className="card-body"><ErrorNote error={feed.error} /></div>
         ) : feed.loading && !feed.data ? (
           <Loading />
         ) : !items.length ? (
-          <Empty title="No decisions match">Try clearing a filter.</Empty>
+          <Empty title="No decisions match these filters" />
         ) : (
           <>
             <DecisionTable items={items} onOpen={setOpenId} />
@@ -123,6 +116,7 @@ export function SilenceFeed() {
 export function ReviewQueue() {
   const api = useApi();
   const role = useRole();
+  const productName = useProductNames();
   const queue = useQuery(() => api.decisions({ outcome: "review", limit: 100 }), []);
   useStream((e) => (e.type === "decision_created" || e.type === "outcome_recorded") && queue.reload());
 
@@ -132,32 +126,36 @@ export function ReviewQueue() {
 
   return (
     <>
-      <ConsoleHead title="Review queue">Credit offers always go to a person before anything is sent.</ConsoleHead>
+      <ConsoleHead title="Review queue">{queue.data ? `${pending.length} pending` : null}</ConsoleHead>
       <div className="stack">
         {!allowed && (
           <div className="alert alert-info">
-            You're acting as {humanize(role)}. Approving needs Compliance or Campaign manager; the API will refuse with 403.
+            {humanize(role)} can't approve credit offers. Switch role to Compliance or Campaign manager.
           </div>
         )}
         <ErrorNote error={queue.error} />
-        {queue.loading && !queue.data && <Loading />}
-        {queue.data && !pending.length && (
-          <Card><Empty title="Nothing waiting">Run decisions for an SME owner to create a credit review.</Empty></Card>
-        )}
-        {pending.map((d) => <ReviewItem key={d.id} decision={d} onDone={queue.reload} />)}
+        <Card endpoint={["POST /decisions/{id}/approve", "POST /decisions/{id}/reject"]} bodyClass="">
+          {queue.loading && !queue.data ? (
+            <Loading />
+          ) : !pending.length ? (
+            <Empty title="Nothing to review" />
+          ) : (
+            pending.map((d) => <ReviewRow key={d.id} decision={d} onDone={queue.reload} />)
+          )}
+        </Card>
         {done.length > 0 && (
           <Card title="Reviewed" bodyClass="">
             <div className="table-wrap">
               <table className="table">
-                <thead><tr><th>Decision</th><th>Customer</th><th>Product</th><th>Result</th><th>Note</th></tr></thead>
+                <thead><tr><th>Customer</th><th>Product</th><th>Result</th><th>By</th><th>Note</th></tr></thead>
                 <tbody>
                   {done.map((d) => (
                     <tr key={d.id}>
-                      <td><code>{d.id}</code></td>
                       <td><code>{d.customer_ref}</code></td>
-                      <td className="small">{d.product_id && humanize(d.product_id)}</td>
-                      <td><Badge tone={d.review!.action === "approved" ? "green" : "red"}>{d.review!.action}</Badge> <span className="small muted">by {humanize(d.review!.by)}</span></td>
-                      <td className="small muted">{d.review!.note ?? "—"}</td>
+                      <td className="small">{productName(d.product_id)}</td>
+                      <td><Badge tone={d.review!.action === "approved" ? "green" : "red"}>{d.review!.action === "approved" ? "Approved" : "Declined"}</Badge></td>
+                      <td className="small muted">{humanize(d.review!.by)}</td>
+                      <td className="small muted">{d.review!.note || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -170,42 +168,67 @@ export function ReviewQueue() {
   );
 }
 
-function ReviewItem({ decision, onDone }: { decision: Decision; onDone: () => void }) {
+function ReviewRow({ decision: d, onDone }: { decision: Decision; onDone: () => void }) {
   const api = useApi();
-  const [note, setNote] = useState("");
+  const { technical } = useTechnical();
+  const productName = useProductNames();
+  const [open, setOpen] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [reason, setReason] = useState("");
   const [approve, approveState] = useAction(api.approve);
   const [reject, rejectState] = useAction(api.reject);
-  const [expanded, setExpanded] = useState(false);
-  const error = approveState.error ?? rejectState.error;
+  const busy = approveState.loading || rejectState.loading;
 
   return (
-    <Card
-      title={<>{decision.product_id && humanize(decision.product_id)} <ReasonChip code="CREDIT_REVIEW" /></>}
-      sub={<>For <code>{decision.customer_ref}</code> · {fmtDateTime(decision.as_of)} · via {decision.channel}</>}
-      endpoint={["POST /decisions/{id}/approve", "POST /decisions/{id}/reject"]}
-      actions={<Button size="sm" variant="ghost" onClick={() => setExpanded(!expanded)}>{expanded ? "Hide trace" : "Show trace"}</Button>}
-    >
-      <div className="stack">
-        {expanded ? <DecisionView decision={decision} /> : decision.message && (
-          <div className="msg-preview">
-            <div className="t">{decision.message.title}</div>
-            <div className="b">{decision.message.body}</div>
+    <div className="queue-row">
+      <div className="queue-main">
+        <div>
+          <div className="row" style={{ gap: 8 }}>
+            <strong>{productName(d.product_id)}</strong>
+            <Badge tone="blue">Credit</Badge>
           </div>
-        )}
-        <Field label="Note or reason" hint="A reason is required to reject.">
-          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Affordability checked against inflows" />
-        </Field>
-        <ErrorNote error={error} />
-        <div className="row">
-          <Button variant="primary" loading={approveState.loading} onClick={async () => (await approve(decision.id, note || undefined)) && onDone()}>
-            Approve and send
+          <div className="small muted">
+            <code>{d.customer_ref}</code> · {fmtDateTime(d.as_of)} · {d.channel ? CHANNEL_LABEL[d.channel] : "—"}
+          </div>
+        </div>
+        <div className="row" style={{ gap: 6 }}>
+          <Button size="sm" variant="ghost" onClick={() => setOpen(!open)}>{open ? "Hide" : "Preview"}</Button>
+          <Button size="sm" variant="primary" loading={approveState.loading} disabled={busy} onClick={async () => (await approve(d.id)) && onDone()}>
+            Approve
           </Button>
-          <Button variant="danger" loading={rejectState.loading} onClick={async () => (await reject(decision.id, note)) && onDone()}>
-            Reject
-          </Button>
+          <Button size="sm" variant="danger" disabled={busy} onClick={() => setDeclining(true)}>Decline</Button>
         </div>
       </div>
-    </Card>
+
+      {declining && (
+        <form
+          className="row"
+          style={{ marginTop: 10 }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (await reject(d.id, reason)) onDone();
+          }}
+        >
+          <input className="input input-sm" style={{ flex: 1, minWidth: 200 }} placeholder="Reason for declining" value={reason} onChange={(e) => setReason(e.target.value)} autoFocus />
+          <Button type="submit" size="sm" variant="danger" loading={rejectState.loading} disabled={!reason.trim()}>Confirm decline</Button>
+          <Button size="sm" variant="ghost" onClick={() => setDeclining(false)}>Cancel</Button>
+        </form>
+      )}
+
+      {open && (
+        <div style={{ marginTop: 12 }}>
+          {technical ? <DecisionView decision={d} /> : d.message && (
+            <div className="msg-preview">
+              <div className="t">{d.message.title}</div>
+              <div className="b">{d.message.body}</div>
+            </div>
+          )}
+        </div>
+      )}
+      {(approveState.error || rejectState.error) && (
+        <div style={{ marginTop: 10 }}><ErrorNote error={approveState.error ?? rejectState.error} /></div>
+      )}
+    </div>
   );
 }
 
@@ -230,15 +253,15 @@ export function RunDecisions() {
 
   return (
     <>
-      <ConsoleHead title="Run decisions">Run the pipeline for one customer, or a segment followed by the governor.</ConsoleHead>
+      <ConsoleHead title="Run decisions" />
       <div className="stack">
-        <Card title="One customer" endpoint="POST /decisions/evaluate">
+        <Card title="Single customer" endpoint="POST /decisions/evaluate">
           <div className="stack">
             <div className="grid-3">
               <Field label="Customer ref">
                 <input className="input" list="known-refs" placeholder="cus_…" value={ref} onChange={(e) => setRef(e.target.value.trim())} />
               </Field>
-              <Field label="As of" hint="Empty uses the simulator clock.">
+              <Field label="As of" hint="Defaults to the simulator clock.">
                 <input className="input" type="datetime-local" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
               </Field>
               <Field label="Mode">
@@ -252,9 +275,9 @@ export function RunDecisions() {
           </div>
         </Card>
 
-        <Card title="Batch" sub="Same pipeline over a list of customers. Leave empty to run everyone." endpoint="POST /decisions/batch">
+        <Card title="Batch" endpoint="POST /decisions/batch">
           <div className="stack">
-            <Field label="Customer refs" hint={`${parsedIds.length || "All"} customers. Separate with commas or new lines.`}>
+            <Field label="Customer refs" hint={parsedIds.length ? `${parsedIds.length} customers` : "Leave empty to run all customers."}>
               <textarea className="textarea" rows={3} value={ids} onChange={(e) => setIds(e.target.value)} placeholder="cus_8f3a, cus_21bc" />
             </Field>
             <div className="row">

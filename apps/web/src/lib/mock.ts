@@ -5,10 +5,13 @@
 
 import type { RequestOptions } from "./api";
 import { ApiError } from "./errors";
-import { DEMO_ACCOUNTS, PATTERN_TRIGGER, PERSONAS, SEGMENTS } from "./personas";
+import { getMode } from "./mode";
+import { DEMO_CUSTOMERS, DEMO_PASSWORD, PATTERN_TRIGGER, PERSONAS, SEGMENTS } from "./personas";
 import { KEYS, load, save } from "./storage";
 import {
   CHANNELS,
+  OUTCOME_LABEL,
+  REASON_LABEL,
   STAFF_ROLES,
   type AuditEntry,
   type CampaignRequest,
@@ -22,6 +25,7 @@ import {
   type EligibilityRule,
   type EvalMode,
   type Experiment,
+  type ForYouItem,
   type Message,
   type ModelInfo,
   type Outcome,
@@ -31,6 +35,8 @@ import {
   type PolicyDraft,
   type Product,
   type ReasonCode,
+  type RewardItem,
+  type RewardsAccount,
   type Role,
   type RuleCheck,
   type SimState,
@@ -93,27 +99,51 @@ function requireRole(role: Role | undefined, allowed: Role[]) {
 
 // ---------- catalogue of triggers and copy ----------
 
-const TRIGGERS: Record<string, { evidence: string; sentence: string; category: string; label: string; products: string[] }> = {
+type TriggerDef = { evidence: string; sentence: string; category: string; label: string; products: string[] };
+
+// Trigger types match the backend catalogue's gain_model names
+const TRIGGERS: Record<string, TriggerDef> = {
   salary_regular: {
     evidence: "salary on the 25th, 4 months",
     sentence: "your salary arrives on the 25th",
     category: "income",
     label: "salary payments",
-    products: ["prd_target_savings", "prd_salary_advance"],
+    products: ["prd_target_savings", "prd_personal_loan"],
   },
   fee_season: {
     evidence: "fees paid each January and September",
     sentence: "you have paid school fees each January and September",
     category: "education",
     label: "school fee payments",
-    products: ["prd_school_fees_plan", "prd_target_savings"],
+    products: ["prd_target_savings"],
   },
-  sme_inflow_growth: {
-    evidence: "business inflows up 38% over 3 months",
-    sentence: "money coming into your business has grown for three months",
+  pos_inflow_growth: {
+    evidence: "POS inflows up 38% over 3 months",
+    sentence: "your POS sales have grown for three months",
     category: "business",
-    label: "business account inflows",
-    products: ["prd_business_collections", "prd_sme_loan"],
+    label: "POS sales",
+    products: ["prd_business_collections"],
+  },
+  small_frequent_spend: {
+    evidence: "40+ card payments under ₦5k a month",
+    sentence: "you make lots of small card payments",
+    category: "spending",
+    label: "card payments",
+    products: ["prd_savings_round_up"],
+  },
+  recurring_bill_pattern: {
+    evidence: "DSTV and power paid monthly, 6 months",
+    sentence: "you pay DSTV and power bills every month",
+    category: "bills",
+    label: "bill payments",
+    products: ["prd_bills_autopay"],
+  },
+  international_spend: {
+    evidence: "USD card payments online, 3 months",
+    sentence: "you often pay for things in dollars online",
+    category: "spending",
+    label: "online dollar payments",
+    products: ["prd_fx_card"],
   },
   betting_spend: {
     evidence: "regular payments to betting merchants",
@@ -126,34 +156,68 @@ const TRIGGERS: Record<string, { evidence: string; sentence: string; category: s
 
 const BASE_UPLIFT: Record<string, number> = {
   prd_target_savings: 0.071,
-  prd_school_fees_plan: 0.064,
   prd_business_collections: 0.083,
-  prd_salary_advance: 0.052,
-  prd_sme_loan: 0.046,
+  prd_savings_round_up: 0.034,
+  prd_personal_loan: 0.052,
+  prd_fx_card: 0.041,
+  prd_bills_autopay: 0.028,
 };
-const PERSONA_FACTOR: Record<Persona, number> = { salaried_parent: 1, sme_owner: 1, young_professional: 0.2 };
 
 const TITLES: Record<string, string> = {
   prd_target_savings: "Make your salary work towards a goal",
-  prd_school_fees_plan: "School fees are coming up",
-  prd_business_collections: "Your business is growing",
-  prd_salary_advance: "A cushion before payday",
-  prd_sme_loan: "Funding to grow your business",
+  prd_business_collections: "Your sales are growing",
+  prd_savings_round_up: "Save your spare change",
+  prd_personal_loan: "A loan with fixed repayments",
+  prd_fx_card: "Pay in dollars online",
+  prd_bills_autopay: "Never miss a bill",
 };
 
-const notHeld = (id: string): EligibilityRule => ({ fact: "holds", op: "not_contains", value: id });
-const adult: EligibilityRule = { fact: "age", op: ">=", value: 18 };
-
+// Copied from the backend catalogue (apps/api/src/matchpoint/simulator/transports/catalogue.py)
 function seedProducts(): Product[] {
-  const p = (id: string, name: string, category: string, is_credit: boolean, features: string[], version: number) => ({
-    id, name, category, is_credit, features, eligibility: { all: [adult, notHeld(id)] }, version,
-  });
+  const adult: EligibilityRule = { fact: "age", op: ">=", value: 18 };
   return [
-    p("prd_target_savings", "Target savings account", "savings", false, ["Set a goal", "Automatic monthly transfer"], 3),
-    p("prd_school_fees_plan", "School fees plan", "savings", false, ["Save towards each term", "Pay the school directly"], 1),
-    p("prd_business_collections", "Business collections account", "business", false, ["Accept transfers and POS payments", "Daily settlement"], 2),
-    p("prd_salary_advance", "Salary advance", "credit", true, ["Up to 50% of monthly salary", "Repaid on payday"], 1),
-    p("prd_sme_loan", "Small business loan", "credit", true, ["Working capital up to ₦5m", "Repay over 12 months"], 1),
+    {
+      id: "prd_target_savings", name: "Target savings account", category: "savings", is_credit: false,
+      features: ["Set a goal", "Automatic monthly transfer"],
+      eligibility: { all: [adult, { fact: "holds", op: "not_contains", value: "prd_target_savings" }] },
+      version: 3, key_facts: ["No monthly fee", "Goal reminders", "Interest on balance"],
+      gain_model: "salary_regular + fee_season", compare_group: "salaried-no-savings-goal",
+    },
+    {
+      id: "prd_business_collections", name: "Business collections account", category: "business", is_credit: false,
+      features: ["POS-ready", "Settlement in 24h", "USSD-friendly"],
+      eligibility: { all: [{ fact: "segment", op: "in", value: ["trader", "sme"] }, { fact: "holds", op: "not_contains", value: "prd_business_collections" }] },
+      version: 2, key_facts: ["Faster settlement", "POS without upfront cost", "USSD check"],
+      gain_model: "pos_inflow_growth", compare_group: "sme-growing-inflows",
+    },
+    {
+      id: "prd_savings_round_up", name: "Round-up savings", category: "savings", is_credit: false,
+      features: ["Rounds spare change", "Visible balance", "Withdraw any time"],
+      eligibility: { all: [adult] },
+      version: 1, key_facts: ["No monthly fee", "No lock-in"],
+      gain_model: "small_frequent_spend", compare_group: "salaried-active-pos",
+    },
+    {
+      id: "prd_personal_loan", name: "Personal loan", category: "credit", is_credit: true,
+      features: ["Fixed monthly repayment", "Up to 24 months"],
+      eligibility: { all: [{ fact: "age", op: ">=", value: 21 }, { fact: "segment", op: "in", value: ["salaried"] }, { fact: "holds", op: "not_contains", value: "personal_loan" }] },
+      version: 4, key_facts: ["Fixed APR", "No early-repayment penalty"],
+      gain_model: "salary_regular + no_existing_loan", compare_group: "salaried-no-active-loan",
+    },
+    {
+      id: "prd_fx_card", name: "Dollar FX card", category: "cards", is_credit: false,
+      features: ["Spend in USD", "Online payments abroad"],
+      eligibility: { all: [adult, { fact: "segment", op: "in", value: ["salaried", "sme"] }] },
+      version: 1, key_facts: ["$10/year", "Instant freeze in app"],
+      gain_model: "international_spend", compare_group: "salaried-abroad",
+    },
+    {
+      id: "prd_bills_autopay", name: "Bills autopay", category: "service", is_credit: false,
+      features: ["Schedule DSTV, power and water", "Pause any time"],
+      eligibility: { all: [adult] },
+      version: 1, key_facts: ["No service charge", "Reminders before each run"],
+      gain_model: "recurring_bill_pattern", compare_group: "salaried-active-bills",
+    },
   ];
 }
 
@@ -177,7 +241,14 @@ const DEFAULT_POLICY: Policy = {
 
 // ---------- database ----------
 
-type StoredCustomer = Customer & { password: string; patterns: Pattern[]; epoch: number };
+type StoredCustomer = Customer & {
+  password: string;
+  patterns: Pattern[];
+  epoch: number;
+  triggers: string[];
+  uplift: number;
+  complaint_open: boolean;
+};
 
 interface Db {
   customers: Record<string, StoredCustomer>;
@@ -192,9 +263,28 @@ interface Db {
   experiments: Experiment[];
   model: ModelInfo;
   sim: SimState;
+  rewards: Record<string, RewardsLedger>;
+  // IDs of decisions copied from the live API (see mockRecordDecision)
+  liveDecisionIds: string[];
 }
 
-const refFor = (phone: string) => `cus_${hash(`phone:${phone}`)}`;
+// Mirrors the API's rewards rules (apps/api/src/matchpoint/rewards/rules.py)
+interface RewardsLedger {
+  balance: number;
+  lifetime: number;
+  keys: string[];
+}
+const EARN_POINTS: Record<string, number> = { consent_granted: 50, offer_feedback: 5 };
+const TIERS: [string, number][] = [["Base", 0], ["Silver", 200], ["Gold", 600]];
+const REWARD_CATALOGUE: RewardItem[] = [
+  { id: "rwi_airtime_500", name: "Airtime ₦500", points: 100, kind: "airtime" },
+  { id: "rwi_fee_waiver", name: "Transfer fee waiver", points: 150, kind: "fee_waiver" },
+  { id: "rwi_voucher_1000", name: "₦1,000 voucher", points: 300, kind: "voucher" },
+];
+const tierOf = (points: number) => TIERS.filter(([, at]) => points >= at).at(-1)![0];
+
+// Same shape as the backend's HMAC refs: cus_ + 12 hex
+const refFor = (phone: string) => `cus_${hash(`phone:${phone}`, 12)}`;
 
 function emptyDb(): Db {
   return {
@@ -210,57 +300,57 @@ function emptyDb(): Db {
     experiments: [],
     model: { version: "upl_0.3", qini: 0.274, trained_at: "2026-11-30T16:00:00+01:00", simulated: true },
     sim: { running: true, seed: 42, n_customers: 5000, days: 120, scenario: "baseline", clock: START_CLOCK, simulated: true },
+    rewards: {},
+    liveDecisionIds: [],
   };
 }
 
-function addCustomer(db: Db, c: Omit<StoredCustomer, "customer_ref" | "epoch" | "patterns" | "age_band" | "segment" | "holdings">, consent: ConsentInput, source: string, at: string) {
-  const persona = PERSONAS[c.persona];
-  const customer: StoredCustomer = {
-    ...c,
-    customer_ref: refFor(c.phone),
-    age_band: persona.age_band,
-    segment: persona.segment,
-    holdings: [...persona.holdings],
-    patterns: [],
-    epoch: 0,
+function addCustomer(db: Db, customer: Omit<StoredCustomer, "patterns" | "epoch">, consent: ConsentInput, source: string, at: string) {
+  const stored: StoredCustomer = { ...customer, holdings: [...customer.holdings], patterns: [], epoch: 0 };
+  db.customers[stored.customer_ref] = stored;
+  writeConsent(db, stored.customer_ref, consent, source, at);
+  return stored;
+}
+
+function fromPersona(name: string, phone: string, password: string, persona: Persona): Omit<StoredCustomer, "patterns" | "epoch"> {
+  const p = PERSONAS[persona];
+  return {
+    customer_ref: refFor(phone), name, phone, password, persona,
+    age_band: p.age_band, segment: p.segment, holdings: p.holdings, triggers: p.triggers, uplift: p.uplift, complaint_open: false,
   };
-  db.customers[customer.customer_ref] = customer;
-  writeConsent(db, customer.customer_ref, consent, source, at);
-  return customer;
 }
 
 function seedDb(): Db {
   const db = emptyDb();
   const at = "2026-11-20T18:41:00+01:00";
-  const offers = (on: boolean, channels: Channel[]): ConsentInput => ({
-    personalised_offers: on,
-    channels: { app: channels.includes("app"), whatsapp: channels.includes("whatsapp"), sms: channels.includes("sms"), email: channels.includes("email") },
-  });
-  const demoConsent: ConsentInput[] = [
-    offers(true, ["app", "whatsapp"]),
-    offers(true, ["whatsapp", "sms"]),
-    offers(true, ["app"]),
-    offers(false, ["app"]),
-  ];
-  DEMO_ACCOUNTS.forEach((a, i) => addCustomer(db, { name: a.name, phone: a.phone, password: a.password, persona: a.persona }, demoConsent[i], "app_settings", at));
+  for (const c of DEMO_CUSTOMERS) {
+    addCustomer(
+      db,
+      {
+        customer_ref: c.ref, name: c.name, phone: c.phone, password: DEMO_PASSWORD, story: c.note,
+        age_band: c.age_band, segment: c.segment, holdings: c.holdings, triggers: c.triggers, uplift: c.uplift,
+        complaint_open: Boolean(c.complaint_open),
+      },
+      { personalised_offers: c.personalised_offers, channels: c.channels },
+      "demo_seed",
+      at,
+    );
+  }
 
   // A small synthetic population so the console has something to show
   const r = rng(42);
-  const first = ["Adaeze", "Bola", "Chinedu", "Damilola", "Emeka", "Funke", "Gbenga", "Halima", "Ifeoma", "Kemi", "Musa", "Ngozi", "Olu", "Sade", "Yusuf", "Uche"];
+  const first = ["Bola", "Chinedu", "Damilola", "Funke", "Gbenga", "Ifeoma", "Kemi", "Olu", "Sade", "Yusuf", "Uche", "Zainab"];
   const last = ["Adeyemi", "Okafor", "Bello", "Nwosu", "Lawal", "Eze", "Ibrahim", "Ogunleye"];
   const personas = Object.keys(PERSONAS) as Persona[];
   const synthetic: StoredCustomer[] = [];
   for (let i = 0; i < 28; i++) {
-    const channels = CHANNELS.filter(() => r() > 0.45);
+    const picked = CHANNELS.filter(() => r() > 0.5);
+    const channels = Object.fromEntries(CHANNELS.map((ch) => [ch, picked.includes(ch)])) as Record<Channel, boolean>;
+    const name = `${first[Math.floor(r() * first.length)]} ${last[Math.floor(r() * last.length)]}`;
     const c = addCustomer(
       db,
-      {
-        name: `${first[Math.floor(r() * first.length)]} ${last[Math.floor(r() * last.length)]}`,
-        phone: `0809${String(1000000 + i).slice(1)}`,
-        password: "",
-        persona: personas[Math.floor(r() * personas.length)],
-      },
-      offers(r() > 0.2, channels.length ? channels : r() > 0.5 ? ["app"] : []),
+      fromPersona(name, `0809${String(1000000 + i).slice(1)}`, "", personas[Math.floor(r() * personas.length)]),
+      { personalised_offers: r() > 0.2, channels },
       "onboarding",
       at,
     );
@@ -278,8 +368,72 @@ function seedDb(): Db {
 }
 
 function loadDb(): Db {
-  return load<Db | null>(KEYS.mockDb, null) ?? seedDb();
+  const db = load<Db | null>(KEYS.mockDb, null) ?? seedDb();
+  db.rewards ??= {};
+  db.liveDecisionIds ??= [];
+  return db;
 }
+
+/** Awards points once per key, like the API's idempotent earn events. */
+function earn(db: Db, ref: string, event: string, key: string) {
+  const acct = (db.rewards[ref] ??= { balance: 0, lifetime: 0, keys: [] });
+  const points = EARN_POINTS[event];
+  if (!points || acct.keys.includes(key)) return;
+  const before = tierOf(acct.balance);
+  acct.balance += points;
+  acct.lifetime += points;
+  acct.keys.push(key);
+  const tier = tierOf(acct.balance);
+  emit(db, "points_awarded", { customer_ref: ref, event, points, balance: acct.balance, tier });
+  if (tier !== before) emit(db, "tier_changed", { customer_ref: ref, from_tier: before, to_tier: tier });
+}
+
+function rewardsView(db: Db, ref: string): RewardsAccount {
+  const acct = db.rewards[ref] ?? { balance: 0, lifetime: 0, keys: [] };
+  const next = TIERS.find(([, at]) => at > acct.balance);
+  return {
+    customer_ref: ref,
+    balance: acct.balance,
+    lifetime_earned: acct.lifetime,
+    tier: tierOf(acct.balance),
+    next_tier: next ? { name: next[0], points_needed: next[1] - acct.balance } : null,
+  };
+}
+
+// Synthetic baseline per channel, plus whatever the sandbox has really sent
+const CHANNEL_BASE: Record<Channel, { share: number; click: number; uptake: number }> = {
+  app: { share: 0.46, click: 0.34, uptake: 0.048 },
+  whatsapp: { share: 0.31, click: 0.41, uptake: 0.052 },
+  sms: { share: 0.15, click: 0.12, uptake: 0.021 },
+  email: { share: 0.05, click: 0.09, uptake: 0.015 },
+  ussd: { share: 0.03, click: 0.06, uptake: 0.011 },
+};
+
+function channelStats(db: Db) {
+  const n = db.sim.running ? db.sim.n_customers : 0;
+  const rate = (part: number, whole: number) => (whole ? round(part / whole) : 0);
+  const rows = CHANNELS.map((channel) => {
+    const base = CHANNEL_BASE[channel];
+    const baseSent = Math.round(n * 0.082 * base.share);
+    const mine = db.messages.filter((m) => m.channel === channel && m.status !== "cancelled" && m.status !== "scheduled");
+    const opened = Math.round(baseSent * base.click) + mine.filter((m) => m.status !== "delivered").length;
+    const accepted = Math.round(baseSent * base.uptake) + mine.filter((m) => m.status === "accepted").length;
+    const sent = baseSent + mine.length;
+    return { channel, sent, opened, accepted, click_rate: rate(opened, sent), product_uptake: rate(accepted, sent) };
+  });
+  const sent = rows.reduce((a, r) => a + r.sent, 0);
+  const opened = rows.reduce((a, r) => a + r.opened, 0);
+  const accepted = rows.reduce((a, r) => a + r.accepted, 0);
+  return {
+    channels: rows.map(({ channel, sent, click_rate, product_uptake }) => ({ channel, sent, click_rate, product_uptake })),
+    total: { sent, click_rate: rate(opened, sent), product_uptake: rate(accepted, sent) },
+  };
+}
+
+const GAINS: Record<string, { amount_ngn: number; period_months: number; basis: string; example_rate: boolean }> = {
+  prd_target_savings: { amount_ngn: 8500, period_months: 12, basis: "An illustrative 10% a year.", example_rate: true },
+  prd_savings_round_up: { amount_ngn: 6800, period_months: 12, basis: "An illustrative 8% a year.", example_rate: true },
+};
 
 // ---------- events ----------
 
@@ -300,6 +454,23 @@ function flush() {
   }
 }
 
+/** True if the mock knows this customer (e.g. a sign-up the backend can't see yet). */
+export function mockKnowsCustomer(ref: string): boolean {
+  return Boolean(loadDb().customers[ref]);
+}
+
+/**
+ * Copies a decision the live API made into the mock store, so views whose endpoints are not
+ * built yet (GET /decisions, the review queue, the message log) still show it. The API's own
+ * stream announces it, so nothing is emitted here. Remove once GET /decisions exists.
+ */
+export function mockRecordDecision(d: Decision): void {
+  const db = loadDb();
+  if (!db.liveDecisionIds.includes(d.id)) db.liveDecisionIds.push(d.id);
+  if (!db.decisions.some((x) => x.id === d.id)) db.decisions.unshift(d);
+  save(KEYS.mockDb, db);
+}
+
 export function mockSubscribe(onEvent: Listener): () => void {
   listeners.add(onEvent);
   return () => listeners.delete(onEvent);
@@ -311,11 +482,14 @@ function activePolicy(db: Db): Policy {
   return db.policies.find((p) => p.status === "active") ?? DEFAULT_POLICY;
 }
 
+// Seeded demo customers keep the backend's refs, so look people up by phone, not by derived ref
+const byPhone = (db: Db, phone: string) => Object.values(db.customers).find((c) => c.phone === phone);
+
 function getCustomer(db: Db, ref: string): StoredCustomer {
   return db.customers[ref] ?? fail(404, "CUSTOMER_NOT_FOUND", `No customer ${ref}.`);
 }
 
-function publicCustomer({ password: _p, patterns: _q, epoch: _e, ...c }: StoredCustomer): Customer {
+function publicCustomer({ password: _p, patterns: _q, epoch: _e, triggers: _t, uplift: _u, complaint_open: _c, ...c }: StoredCustomer): Customer {
   return c;
 }
 
@@ -416,9 +590,14 @@ function evaluate(db: Db, ref: string, asOf: string, mode: EvalMode): Decision {
     return finish("silent", [code]);
   }
   rules.push({ rule: "NO_CONSENT", passed: true, detail: `Consent from ${consent.source}, ${consent.updated_at.slice(0, 10)}` });
+  if (c.complaint_open) {
+    rules.push({ rule: "OPTED_OUT", passed: false, detail: "Open complaint on file; marketing is paused." });
+    return finish("silent", ["OPTED_OUT"]);
+  }
+  rules.push({ rule: "OPTED_OUT", passed: true, detail: "No stop request and no open complaint." });
 
   // 3. Detect and screen
-  const types = new Set([...PERSONAS[c.persona].triggers, ...c.patterns.map((p) => PATTERN_TRIGGER[p])]);
+  const types = new Set([...c.triggers, ...c.patterns.map((p) => PATTERN_TRIGGER[p])]);
   for (const type of types) {
     const def = TRIGGERS[type];
     trace.triggers.push({ type, evidence: def.evidence, category: def.category, blocked: policy.blocked_trigger_categories.includes(def.category) });
@@ -439,7 +618,7 @@ function evaluate(db: Db, ref: string, asOf: string, mode: EvalMode): Decision {
     const p = db.products.find((x) => x.id === id);
     if (!p) continue;
     const dropped = checkEligibility(c, p.eligibility.all);
-    const uplift = round((BASE_UPLIFT[id] ?? 0.03) * PERSONA_FACTOR[c.persona] + boost);
+    const uplift = round((BASE_UPLIFT[id] ?? 0.03) * c.uplift + boost);
     trace.candidates.push({ product_id: id, eligible: !dropped, uplift, ...(dropped ? { dropped } : {}) });
   }
   const eligible = trace.candidates.filter((x) => x.eligible).sort((a, b) => b.uplift - a.uplift);
@@ -494,6 +673,8 @@ function evaluate(db: Db, ref: string, asOf: string, mode: EvalMode): Decision {
   message = compose(product, usable);
   if (product.is_credit && policy.credit_requires_review) {
     rules.push({ rule: "CREDIT_REVIEW", passed: false, detail: "Credit product, a person must approve" });
+    const waiting = db.decisions.find((x) => x.customer_ref === ref && x.product_id === product!.id && x.outcome === "review" && !x.review && x.mode === mode);
+    if (waiting) return waiting;
     return finish("review", ["CREDIT_REVIEW"]);
   }
 
@@ -618,12 +799,12 @@ const routes: Route[] = [
     if (phone.length < 10 || phone.length > 14) fail(422, "VALIDATION_ERROR", "Enter a phone number with 10 to 14 digits.");
     if (String(body.password ?? "").length < 6) fail(422, "VALIDATION_ERROR", "Password must be at least 6 characters.");
     if (!(body.persona in PERSONAS)) fail(422, "VALIDATION_ERROR", "Choose a persona.");
-    if (db.customers[refFor(phone)]) fail(409, "PHONE_TAKEN", "An account with this phone number already exists.");
-    const c = addCustomer(db, { name: body.name.trim(), phone, password: body.password, persona: body.persona }, body.consent ?? {}, "signup", db.sim.clock ?? wat(Date.now()));
+    if (byPhone(db, phone)) fail(409, "PHONE_TAKEN", "An account with this phone number already exists.");
+    const c = addCustomer(db, fromPersona(body.name.trim(), phone, body.password, body.persona), body.consent ?? {}, "signup", db.sim.clock ?? wat(Date.now()));
     return { customer: publicCustomer(c), token: `demo_${hash(c.customer_ref + Date.now(), 12)}` };
   }],
   ["POST", /^\/auth\/signin$/, ({ db, body }) => {
-    const c = db.customers[refFor(String(body.phone ?? "").replace(/\D/g, ""))];
+    const c = byPhone(db, String(body.phone ?? "").replace(/\D/g, ""));
     if (!c || !c.password || c.password !== body.password) fail(401, "INVALID_CREDENTIALS", "Phone number or password is wrong.");
     return { customer: publicCustomer(c), token: `demo_${hash(c.customer_ref + Date.now(), 12)}` };
   }],
@@ -642,7 +823,9 @@ const routes: Route[] = [
   }],
   ["GET", /^\/decisions$/, ({ db, query }) => {
     const since = query.since ? ms(String(query.since)) : null;
-    const items = db.decisions.filter((d) =>
+    // In live mode only show what the API decided, not the mock's sample population
+    const source = getMode() === "live" ? db.decisions.filter((d) => db.liveDecisionIds.includes(d.id)) : db.decisions;
+    const items = source.filter((d) =>
       (!query.outcome || d.outcome === query.outcome) &&
       (!query.reason || d.reasons.includes(query.reason as ReasonCode)) &&
       (!query.product_id || d.product_id === query.product_id) &&
@@ -687,6 +870,7 @@ const routes: Route[] = [
         m.status = "not_now";
         db.cooldowns[`${c.customer_ref}:${m.product_id}`] = wat(ms(at) + 60 * DAY);
         invalidate(db, c.customer_ref);
+        if (db.consent[c.customer_ref]?.personalised_offers) earn(db, c.customer_ref, "offer_feedback", `${c.customer_ref}|offer_feedback|${m.product_id}`);
         break;
       case "stop_offers":
         consent = writeConsent(db, c.customer_ref, { ...db.consent[c.customer_ref], personalised_offers: false }, "stop_offers", at);
@@ -713,7 +897,58 @@ const routes: Route[] = [
     if (typeof body.personalised_offers !== "boolean" || typeof body.channels !== "object") {
       fail(422, "VALIDATION_ERROR", "Send personalised_offers (boolean) and channels.");
     }
-    return writeConsent(db, params[0], body, role === "dpo" ? "dpo_console" : "app_settings", db.sim.clock ?? wat(Date.now()));
+    const before = db.consent[params[0]]?.personalised_offers;
+    const consent = writeConsent(db, params[0], body, role === "dpo" ? "dpo_console" : "app_settings", db.sim.clock ?? wat(Date.now()));
+    if (consent.personalised_offers && !before) earn(db, params[0], "consent_granted", `${params[0]}|consent_granted`);
+    return consent;
+  }],
+
+  // Phone: recommendations and rewards
+  ["GET", /^\/customers\/(cus_\w+)\/for-you$/, ({ db, params }) => {
+    const c = getCustomer(db, params[0]);
+    const offers = db.consent[c.customer_ref]?.personalised_offers;
+    const item = (p: Product, rank: number, why: string): ForYouItem => ({
+      rank, product_id: p.id, name: p.name, why, gain: GAINS[p.id] ?? null, key_facts: p.key_facts ?? [], compare: [],
+    });
+    if (!offers) {
+      const general = db.products.filter((p) => !p.is_credit).slice(0, 3);
+      return { personalised: false, items: general.map((p, i) => item(p, i + 1, "Available to all customers.")), note: null, simulated: true };
+    }
+    const types = new Set([...c.triggers, ...c.patterns.map((pt) => PATTERN_TRIGGER[pt])]);
+    const policy = activePolicy(db);
+    const usable = [...types].map((t) => ({ type: t, def: TRIGGERS[t] })).filter((t) => t.def && !policy.blocked_trigger_categories.includes(t.def.category));
+    const scored = [...new Set(usable.flatMap((t) => t.def.products))]
+      .map((id) => db.products.find((p) => p.id === id))
+      .filter((p): p is Product => !!p && !p.is_credit && !checkEligibility(c, p.eligibility.all))
+      .map((p) => ({ p, uplift: (BASE_UPLIFT[p.id] ?? 0.03) * c.uplift }))
+      .sort((a, b) => b.uplift - a.uplift)
+      .slice(0, 3);
+    const labels = usable.map((t) => t.def.label);
+    const why = `Based on your ${labels.join(" and ")}. You allowed personalised offers.`;
+    const items = scored.map(({ p }, i) => item(p, i + 1, why));
+    if (items.length < 3) {
+      items.push({
+        rank: items.length + 1, product_id: "prd_talk_loans", name: "Talk to us about loans",
+        why: "A credit product needs a person to review it with you.", gain: null,
+        key_facts: ["No obligation.", "Speak to a banker about your needs."], compare: [],
+      });
+    }
+    return { personalised: true, items, note: scored.length ? null : "No products fit you now.", simulated: true };
+  }],
+  ["GET", /^\/customers\/(cus_\w+)\/rewards$/, ({ db, params }) => {
+    getCustomer(db, params[0]);
+    return rewardsView(db, params[0]);
+  }],
+  ["GET", /^\/rewards\/catalogue$/, () => ({ catalogue: REWARD_CATALOGUE, simulated: true })],
+  ["POST", /^\/customers\/(cus_\w+)\/rewards\/redeem$/, ({ db, params, body }) => {
+    getCustomer(db, params[0]);
+    const item = REWARD_CATALOGUE.find((r) => r.id === body.reward_id) ?? fail(404, "REWARD_NOT_FOUND", "Reward not found.");
+    const acct = (db.rewards[params[0]] ??= { balance: 0, lifetime: 0, keys: [] });
+    if (acct.balance < item.points) fail(402, "INSUFFICIENT_POINTS", "Not enough points.");
+    acct.balance -= item.points;
+    const at = db.sim.clock ?? wat(Date.now());
+    emit(db, "points_redeemed", { customer_ref: params[0], reward_id: item.id, points: item.points, balance: acct.balance });
+    return { customer_ref: params[0], balance: acct.balance, receipt: { redemption_id: `rdm_${hash(`${params[0]}|${item.id}|${acct.keys.length}|${Date.now()}`, 8)}`, status: "fulfilled", at } };
   }],
 
   // 5.3 Console
@@ -721,6 +956,7 @@ const routes: Route[] = [
     const n = db.sim.running ? db.sim.n_customers : 0;
     const real = countOutcomes(db.decisions);
     const optOuts = Object.values(db.consent).filter((c) => c.source === "stop_offers").length;
+    const totals = channelStats(db).total;
     return {
       sent: Math.round(n * 0.082) + real.send,
       held: Math.round(n * 0.224) + real.hold,
@@ -728,9 +964,16 @@ const routes: Route[] = [
       review: Math.round(n * 0.006) + real.review,
       opt_outs: Math.round(n * 0.0009) + optOuts,
       sustained_use_60d: 0.41,
+      window_days: 30,
+      as_of: db.sim.clock ?? wat(Date.now()),
+      notifications_sent: totals.sent,
+      click_rate: totals.click_rate,
+      product_uptake: totals.product_uptake,
+      control_group_uptake: 0.022,
       simulated: true,
     };
   }],
+  ["GET", /^\/metrics\/by-channel$/, ({ db }) => ({ window_days: 30, ...channelStats(db), simulated: true })],
   ["GET", /^\/metrics\/by-product$/, ({ db }) => {
     const n = db.sim.running ? db.sim.n_customers : 0;
     const weights = [0.34, 0.18, 0.22, 0.14, 0.12];
@@ -794,7 +1037,7 @@ const routes: Route[] = [
     if (!SEGMENTS.includes(segment)) fail(422, "VALIDATION_ERROR", `segment must be one of ${SEGMENTS.join(", ")}.`);
     const priority = clamp(Number(body.priority) || 1, 1, 5);
     const n = db.sim.running ? db.sim.n_customers : 5000;
-    const reached = segment === "all" ? n : Math.round(n * ({ salaried_parents: 0.19, sme_growing_inflows: 0.082, young_professionals: 0.26 }[segment] ?? 0.1));
+    const reached = segment === "all" ? n : Math.round(n * (({ salaried: 0.46, trader: 0.12, sme: 0.09, student: 0.14 } as Record<string, number>)[segment] ?? 0.1));
     const held_by_rules = Math.round(reached * (product.is_credit ? 0.55 : 0.42));
     const won = Math.round((reached - held_by_rules) * clamp(0.25 + 0.1 * priority, 0, 0.9));
     const at = db.sim.clock ?? wat(Date.now());
@@ -825,7 +1068,7 @@ const routes: Route[] = [
     // Keep accounts people signed up with, but reset their history
     for (const [ref, c] of Object.entries(db.customers)) {
       if (!fresh.customers[ref] && c.password) {
-        fresh.customers[ref] = { ...c, holdings: [...PERSONAS[c.persona].holdings], patterns: [], epoch: 0 };
+        fresh.customers[ref] = { ...c, holdings: c.persona ? [...PERSONAS[c.persona].holdings] : c.holdings, patterns: [], epoch: 0 };
         fresh.consent[ref] = db.consent[ref];
       }
     }
@@ -885,19 +1128,29 @@ const routes: Route[] = [
   ["GET", /^\/model\/info$/, ({ db }) => db.model],
 ];
 
+// Audit summaries are written for compliance staff, not developers
+const CHANNEL_NAME: Record<Channel, string> = { app: "In-app", whatsapp: "WhatsApp", sms: "SMS", email: "Email", ussd: "USSD" };
+const words = (s: string) => s.replace(/_/g, " ");
+
 function auditEntries(db: Db): AuditEntry[] {
+  const productName = (id: string | null) => db.products.find((p) => p.id === id)?.name ?? (id ? words(id) : "");
   const entries: AuditEntry[] = [
-    ...db.decisions.map((d) => ({
-      at: d.as_of, kind: "decision" as const, ref: d.id,
-      summary: `${d.customer_ref}: ${d.outcome}${d.product_id ? ` ${d.product_id}` : ""} (${d.reasons.join(", ")})`,
-    })),
+    ...db.decisions.map((d) => {
+      const reason = d.reasons.find((r) => r !== "OK");
+      const parts = [d.customer_ref, OUTCOME_LABEL[d.outcome], productName(d.product_id), reason ? REASON_LABEL[reason] : ""];
+      return { at: d.as_of, kind: "decision" as const, ref: d.id, summary: parts.filter(Boolean).join(" · ") };
+    }),
     ...db.ledger.map((c) => ({
       at: c.updated_at, kind: "consent" as const, ref: c.customer_ref,
-      summary: `personalised_offers=${c.personalised_offers}, channels: ${CHANNELS.filter((ch) => c.channels[ch]).join(", ") || "none"} (via ${c.source})`,
+      summary: [
+        `Personalised offers ${c.personalised_offers ? "on" : "off"}`,
+        CHANNELS.filter((ch) => c.channels[ch]).map((ch) => CHANNEL_NAME[ch]).join(", ") || "No channels",
+        `via ${words(c.source ?? "api")}`,
+      ].join(" · "),
     })),
     ...db.policies.map((p) => ({
       at: p.created_at, kind: "policy" as const, ref: p.id,
-      summary: `${p.status}${p.approved_by ? `, approved by ${p.approved_by}` : ""}`,
+      summary: `${p.status.charAt(0).toUpperCase()}${p.status.slice(1)}${p.approved_by ? ` · approved by ${words(p.approved_by)}` : ""}`,
     })),
   ];
   return entries.sort((a, b) => ms(b.at) - ms(a.at));

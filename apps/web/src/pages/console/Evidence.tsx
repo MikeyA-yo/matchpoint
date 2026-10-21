@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Badge, Button, Card, ErrorNote, Field, Loading, Simulated, Stat } from "../../components/ui";
-import { useApi } from "../../lib/context";
+import { useApi, useTechnical } from "../../lib/context";
 import { fmtDateTime, fmtPct } from "../../lib/format";
 import { useAction, useQuery } from "../../lib/hooks";
 import type { Experiment, Strategy, StrategyResult } from "../../lib/types";
@@ -9,7 +9,7 @@ import { ConsoleHead } from "./ConsolePage";
 const STRATEGIES: { value: Strategy; label: string; description: string }[] = [
   { value: "blast", label: "Blast", description: "Every eligible customer, every matching product" },
   { value: "caps_only", label: "Caps only", description: "Same, with message caps and cooldowns" },
-  { value: "matchpoint", label: "MATCHPOINT", description: "Consent, rules, uplift, attention budget, governor" },
+  { value: "matchpoint", label: "MATCHPOINT", description: "Consent, contact rules, targeting model, priority" },
 ];
 
 type Metric = { key: keyof StrategyResult; label: string; format: (n: number) => string; better: "low" | "high" };
@@ -59,7 +59,7 @@ export function Experiments() {
               <Button variant="primary" loading={runState.loading} onClick={() => run(seed, picked, days)}>Run</Button>
               <span className="spacer" />
               <input className="input input-sm" style={{ maxWidth: 180 }} placeholder="exp_…" value={lookupId} onChange={(e) => setLookupId(e.target.value.trim())} aria-label="Experiment id" />
-              <Button size="sm" disabled={!lookupId} loading={lookupState.loading} onClick={() => lookup(lookupId)} title="GET /experiments/{id}">Open by id</Button>
+              <Button size="sm" disabled={!lookupId} loading={lookupState.loading} onClick={() => lookup(lookupId)}>Open</Button>
             </div>
             <ErrorNote error={lookupState.error} />
           </div>
@@ -71,6 +71,7 @@ export function Experiments() {
 }
 
 function ExperimentResult({ exp }: { exp: Experiment }) {
+  const { technical } = useTechnical();
   const best = (m: Metric) => {
     const values = exp.results.map((r) => r[m.key] as number);
     return m.better === "low" ? Math.min(...values) : Math.max(...values);
@@ -113,8 +114,8 @@ function ExperimentResult({ exp }: { exp: Experiment }) {
       </div>
       {mp?.uplift_recovery !== undefined && (
         <div className="card-body row" style={{ borderTop: "1px solid var(--border)" }}>
-          <Badge tone="green">Uplift recovery {mp.uplift_recovery.toFixed(2)}</Badge>
-          <span className="small muted">Qini against the planted persuadable / sure thing / lost cause / sleeping dog groups.</span>
+          <Badge tone="green">{technical ? "Uplift recovery" : "Targeting accuracy"} {mp.uplift_recovery.toFixed(2)}</Badge>
+          <span className="small muted">Qini against ground truth</span>
         </div>
       )}
       <div className="card-body small faint" style={{ borderTop: "1px solid var(--border)" }}>
@@ -134,19 +135,19 @@ export function Model() {
 
   return (
     <>
-      <ConsoleHead title="Uplift model">Predicts who a message actually helps. It can only make the system quieter, never override a rule.</ConsoleHead>
+      <ConsoleHead title="Targeting model" />
       <div className="stack">
         <ErrorNote error={info.error ?? trainState.error} />
         {model ? (
           <div className="grid-3">
             <Stat label="Version" value={<code style={{ fontSize: 22 }}>{model.version}</code>} />
-            <Stat label="Qini on held-out data" value={model.qini?.toFixed(3) ?? "—"} hint="Higher is better. 0 is random targeting." />
+            <Stat label="Qini on held-out data" value={model.qini?.toFixed(3) ?? "—"} hint="0 = random targeting" />
             <Stat label="Trained" value={<span style={{ fontSize: 18 }}>{fmtDateTime(model.trained_at)}</span>} />
           </div>
         ) : (
           info.loading && <Loading />
         )}
-        <Card title="Retrain" sub="Trains on the synthetic response logs." endpoint={["POST /model/train", "GET /model/info"]} actions={<Simulated />}>
+        <Card title="Train" sub="Uses the latest response logs." endpoint={["POST /model/train", "GET /model/info"]} actions={<Simulated />}>
           <Button variant="primary" loading={trainState.loading} onClick={() => train()}>Train new version</Button>
         </Card>
       </div>

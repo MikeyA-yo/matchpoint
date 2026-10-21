@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { EventFeed } from "../../components/EventFeed";
+import { EVENT_LABEL, EventFeed } from "../../components/EventFeed";
 import { Badge, Button, Card, Empty, ErrorNote, Field, Loading, Simulated } from "../../components/ui";
-import { useApi } from "../../lib/context";
+import { useApi, useTechnical } from "../../lib/context";
 import { fmtDateTime, humanize } from "../../lib/format";
 import { useAction, useEventLog, useQuery } from "../../lib/hooks";
 import { PATTERNS, STREAM_EVENTS, type Pattern, type SimConfig, type StreamEventType } from "../../lib/types";
@@ -22,7 +22,7 @@ export function Simulator() {
 
   return (
     <>
-      <ConsoleHead title="Simulator">Simulated clock and synthetic customers. Same seed, same population, same result.</ConsoleHead>
+      <ConsoleHead title="Simulator" />
       <div className="stack">
         <Card title="State" endpoint="GET /sim/state" actions={<><Simulated /><Button size="sm" variant="ghost" onClick={state.reload}>Refresh</Button></>}>
           <ErrorNote error={state.error} />
@@ -46,9 +46,9 @@ export function Simulator() {
               <Field label="Days"><input className="input" type="number" min={1} max={365} value={config.days} onChange={(e) => setConfig({ ...config, days: Number(e.target.value) })} /></Field>
               <Field label="Scenario">
                 <select className="select" value={config.scenario} onChange={(e) => setConfig({ ...config, scenario: e.target.value })}>
-                  <option value="baseline">baseline</option>
-                  <option value="fee_season_peak">fee_season_peak</option>
-                  <option value="sme_boom">sme_boom</option>
+                  <option value="baseline">Baseline</option>
+                  <option value="fee_season_peak">School fee season</option>
+                  <option value="sme_boom">Small business growth</option>
                 </select>
               </Field>
             </div>
@@ -59,7 +59,7 @@ export function Simulator() {
           </div>
         </Card>
 
-        <Card title="Inject a pattern" sub="Plant a pattern on demand, for one customer or across the population." endpoint="POST /sim/inject">
+        <Card title="Inject pattern" endpoint="POST /sim/inject">
           <div className="stack">
             <div className="grid-3">
               <Field label="Pattern">
@@ -67,7 +67,7 @@ export function Simulator() {
                   {PATTERNS.map((p) => <option key={p} value={p}>{humanize(p)}</option>)}
                 </select>
               </Field>
-              <Field label="Customer ref" hint="Optional. Empty applies to a share of the population.">
+              <Field label="Customer ref" hint="Optional. Leave empty to apply across the population.">
                 <input className="input" placeholder="cus_…" value={target} onChange={(e) => setTarget(e.target.value.trim())} />
               </Field>
             </div>
@@ -79,7 +79,7 @@ export function Simulator() {
           </div>
         </Card>
 
-        <Card title="Reset" sub="Clears decisions, messages and experiments and stops the clock. Demo accounts are kept." endpoint="POST /sim/reset">
+        <Card title="Reset" sub="Clears decisions, messages and experiments. Accounts are kept." endpoint="POST /sim/reset">
           <ErrorNote error={resetState.error} />
           <Button
             variant="danger"
@@ -101,13 +101,14 @@ export function Simulator() {
 // ---------- GET /stream ----------
 
 export function Events() {
+  const { technical } = useTechnical();
   const [types, setTypes] = useState<StreamEventType[]>(STREAM_EVENTS);
   const [events, clear] = useEventLog((e) => types.includes(e.type), 100);
   const toggle = (t: StreamEventType) => setTypes((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
 
   return (
     <>
-      <ConsoleHead title="Live events">Server-sent events from every part of the pipeline. Keep this open next to the phone view.</ConsoleHead>
+      <ConsoleHead title="Event stream" />
       <Card
         title={<><span className="live-dot" aria-hidden /> Stream</>}
         endpoint="GET /stream"
@@ -117,11 +118,11 @@ export function Events() {
           {STREAM_EVENTS.map((t) => (
             <label key={t} className="checkbox small">
               <input type="checkbox" checked={types.includes(t)} onChange={() => toggle(t)} />
-              <code>{t}</code>
+              {technical ? <code>{t}</code> : EVENT_LABEL[t]}
             </label>
           ))}
         </div>
-        <EventFeed events={events} emptyHint="Open the customer view in another tab and run a decision." />
+        <EventFeed events={events} emptyHint="Events appear here as they happen." />
       </Card>
     </>
   );
@@ -145,10 +146,9 @@ export function Audit() {
 
   return (
     <>
-      <ConsoleHead title="Audit log">The decision log, consent ledger and policy history, joined. All append-only.</ConsoleHead>
+      <ConsoleHead title="Audit log" />
       <Card
         title={<>Entries <Badge tone="amber">stub</Badge></>}
-        sub="Marked X (stub) in the API guideline."
         endpoint={["GET /audit/log", "GET /audit/export"]}
         actions={<Button size="sm" loading={exportState.loading} onClick={download}>Export JSON</Button>}
         bodyClass=""

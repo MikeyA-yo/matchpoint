@@ -4,7 +4,11 @@ import { humanize } from "./format";
 import { useQuery } from "./hooks";
 
 // Products a customer can hold that are not in the offer catalogue
-const BUILT_IN: Record<string, string> = { prd_current: "Current account" };
+const BUILT_IN: Record<string, string> = {
+  current_account: "Current account",
+  savings_account: "Savings account",
+  personal_loan: "Personal loan",
+};
 
 /** Returns a lookup from product ID to its customer-facing name. */
 export function useProductNames() {

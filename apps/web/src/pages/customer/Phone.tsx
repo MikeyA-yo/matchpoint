@@ -3,9 +3,9 @@ import { useApi } from "../../lib/context";
 import { CHANNEL_LABEL, fmtDateTime, fmtTime } from "../../lib/format";
 import { useAction, useQuery, useStream } from "../../lib/hooks";
 import { useProductNames } from "../../lib/products";
-import { CHANNELS, type Channel, type Consent, type Customer, type Message, type RespondAction } from "../../lib/types";
+import { CHANNELS, type Channel, type Consent, type Customer, type Message, type RespondAction, type RewardsAccount } from "../../lib/types";
 
-type Tab = "home" | "inbox" | "settings";
+type Tab = "home" | "foryou" | "inbox" | "rewards" | "settings";
 
 /** The customer's phone: every endpoint in api_design.md 5.2. */
 export function Phone({ customer }: { customer: Customer }) {
@@ -17,6 +17,15 @@ export function Phone({ customer }: { customer: Customer }) {
   const inbox = useQuery(() => api.inbox(ref), [ref]);
   const profile = useQuery(() => api.customer(ref), [ref]);
   const consent = useQuery(() => api.consent(ref), [ref]);
+  const rewards = useQuery(() => api.rewards(ref), [ref]);
+
+  // The API doesn't announce every customer action on the stream, so refresh after our own
+  const refreshAll = () => {
+    inbox.reload();
+    profile.reload();
+    consent.reload();
+    rewards.reload();
+  };
 
   useStream((e) => {
     if (e.data.customer_ref !== ref) return;
@@ -25,6 +34,7 @@ export function Phone({ customer }: { customer: Customer }) {
       profile.reload();
     }
     if (e.type === "consent_changed") consent.reload();
+    if (e.type === "points_awarded" || e.type === "points_redeemed" || e.type === "tier_changed") rewards.reload();
   });
 
   const messages = inbox.data?.items ?? [];
@@ -41,7 +51,7 @@ export function Phone({ customer }: { customer: Customer }) {
         </div>
 
         {open ? (
-          <MessageView message={open} onBack={() => setOpenId(null)} onSettings={() => { setOpenId(null); setTab("settings"); }} />
+          <MessageView message={open} onBack={() => setOpenId(null)} onSettings={() => { setOpenId(null); setTab("settings"); }} onChanged={refreshAll} />
         ) : (
           <>
             <div className="phone-head">
@@ -51,7 +61,9 @@ export function Phone({ customer }: { customer: Customer }) {
             <div className="phone-body">
               {tab === "home" && <HomeTab holdings={profile.data?.holdings ?? customer.holdings} unread={unread} onInbox={() => setTab("inbox")} />}
               {tab === "inbox" && <InboxTab messages={messages} loading={inbox.loading && !inbox.data} error={inbox.error?.message} onOpen={setOpenId} />}
-              {tab === "settings" && <SettingsTab customerRef={ref} consent={consent.data} error={consent.error?.message} onSaved={consent.reload} />}
+              {tab === "foryou" && <ForYouTab customerRef={ref} refreshKey={`${consent.data?.personalised_offers}|${profile.data?.holdings.length}`} onPrivacy={() => setTab("settings")} />}
+              {tab === "rewards" && <RewardsTab customerRef={ref} account={rewards.data} error={rewards.error?.message} onChanged={rewards.reload} />}
+              {tab === "settings" && <SettingsTab customerRef={ref} consent={consent.data} error={consent.error?.message} onSaved={refreshAll} />}
             </div>
           </>
         )}
@@ -59,7 +71,9 @@ export function Phone({ customer }: { customer: Customer }) {
         <nav className="phone-tabs">
           {([
             ["home", "⌂", "Home"],
+            ["foryou", "★", "For you"],
             ["inbox", "✉", unread ? `Inbox (${unread})` : "Inbox"],
+            ["rewards", "◆", "Rewards"],
             ["settings", "⚙", "Privacy"],
           ] as const).map(([value, icon, label]) => (
             <button key={value} type="button" className={tab === value && !open ? "active" : ""} onClick={() => { setOpenId(null); setTab(value); }}>
@@ -112,7 +126,7 @@ function InboxTab({ messages, loading, error, onOpen }: { messages: Message[]; l
       <div style={{ textAlign: "center", padding: "40px 12px" }}>
         <div style={{ fontSize: 28 }} aria-hidden>✉</div>
         <div className="p-msg-title" style={{ marginTop: 8 }}>No messages</div>
-        <div className="p-msg-meta">MATCHPOINT only gets in touch when it has a good reason to.</div>
+        <div className="p-msg-meta">Offers and updates will appear here.</div>
       </div>
     );
   return (
@@ -134,12 +148,12 @@ function InboxTab({ messages, loading, error, onOpen }: { messages: Message[]; l
 }
 
 const DONE_COPY: Record<Exclude<RespondAction, "opened">, string> = {
-  accepted: "Done. The product has been added to your account.",
-  not_now: "Got it. We won't mention this again for a while.",
-  stop_offers: "You won't get personalised offers on any channel. You can change this in Privacy.",
+  accepted: "Added to your account.",
+  not_now: "OK. We won't show this offer again for a while.",
+  stop_offers: "Personalised offers are off on all channels. You can turn them back on in Privacy.",
 };
 
-function MessageView({ message: m, onBack, onSettings }: { message: Message; onBack: () => void; onSettings: () => void }) {
+function MessageView({ message: m, onBack, onSettings, onChanged }: { message: Message; onBack: () => void; onSettings: () => void; onChanged: () => void }) {
   const api = useApi();
   const [respond, respondState] = useAction(api.respond);
   const [loadWhy, why] = useAction(api.why);
@@ -147,11 +161,14 @@ function MessageView({ message: m, onBack, onSettings }: { message: Message; onB
 
   // Opening the message is itself an outcome the tracker records
   useEffect(() => {
-    if (m.status === "delivered") respond(m.id, "opened");
+    if (m.status === "delivered") respond(m.id, "opened").then((r) => r && onChanged());
   }, [m.id]);
 
   const act = async (action: Exclude<RespondAction, "opened">) => {
-    if (await respond(m.id, action)) setDone(action);
+    if (await respond(m.id, action)) {
+      setDone(action);
+      onChanged();
+    }
   };
   const settled = m.status === "accepted" || m.status === "not_now" || done !== null;
 
@@ -207,6 +224,7 @@ const CHANNEL_HINT: Record<Channel, string> = {
   whatsapp: "Messages from our verified account",
   sms: "Only between 08:00 and 20:00",
   email: "To the address on your account",
+  ussd: "Menus you dial from any phone",
 };
 
 function SettingsTab({ customerRef, consent, error, onSaved }: { customerRef: string; consent?: Consent; error?: string; onSaved: () => void }) {
@@ -282,3 +300,122 @@ function PhoneSwitch({ label, desc, checked, onChange }: { label: string; desc: 
     </label>
   );
 }
+
+// The API's "why" can name raw signals (salary_regular, surplus); say them in words
+const SIGNAL_WORDS: Record<string, string> = {
+  salary_regular: "regular salary",
+  small_frequent_spend: "frequent small payments",
+  surplus: "money left over each month",
+  fee_season: "school fee payments",
+  pos_inflow_growth: "growing POS sales",
+  international_spend: "dollar payments",
+  recurring_bill_pattern: "regular bill payments",
+};
+
+function plainWhy(why: string): string {
+  const words = why.replace(/\b[a-z]+(?:_[a-z]+)+\b|\bsurplus\b/g, (w) => SIGNAL_WORDS[w] ?? w.replace(/_/g, " "));
+  return /^Based on (?!your )/.test(words) ? words.replace(/^Based on /, "Based on your ") : words;
+}
+
+const naira = (n: number) => `₦${n.toLocaleString("en-NG")}`;
+
+function ForYouTab({ customerRef, refreshKey, onPrivacy }: { customerRef: string; refreshKey: string; onPrivacy: () => void }) {
+  const api = useApi();
+  const forYou = useQuery(() => api.forYou(customerRef), [customerRef, refreshKey]);
+
+  if (forYou.loading && !forYou.data) return <p className="p-msg-meta" style={{ textAlign: "center", padding: 24 }}>Loading…</p>;
+  if (forYou.error) return <div className="p-alert">{forYou.error.message}</div>;
+  const data = forYou.data!;
+
+  return (
+    <div className="stack-sm">
+      {!data.personalised && (
+        <div className="p-why">
+          Popular products. <button type="button" className="p-link" onClick={onPrivacy}>Turn on personalised offers</button> to see ones that fit you.
+        </div>
+      )}
+      {data.items.map((item) => (
+        <div key={item.product_id} className="p-card stack-sm">
+          <div className="p-msg-title">{item.name}</div>
+          {item.gain && (
+            <div className="p-gain">
+              Could earn about <strong>{naira(item.gain.amount_ngn)}</strong> in {item.gain.period_months} months
+              <div className="p-msg-meta">{item.gain.basis}</div>
+            </div>
+          )}
+          {item.key_facts.length > 0 && (
+            <div className="row" style={{ gap: 6 }}>
+              {item.key_facts.map((f) => <span key={f} className="p-tag p-tag-grey">{f}</span>)}
+            </div>
+          )}
+          {data.personalised && <div className="p-msg-meta">{plainWhy(item.why)}</div>}
+        </div>
+      ))}
+      {data.note && <p className="p-msg-meta" style={{ textAlign: "center" }}>{data.note}</p>}
+    </div>
+  );
+}
+
+function RewardsTab({ customerRef, account, error, onChanged }: { customerRef: string; account?: RewardsAccount; error?: string; onChanged: () => void }) {
+  const api = useApi();
+  const catalogue = useQuery(() => api.rewardsCatalogue(), []);
+  const [redeem, redeemState, resetRedeem] = useAction(api.redeem);
+  const [redeemed, setRedeemed] = useState<string | null>(null);
+
+  if (error) return <div className="p-alert">{error}</div>;
+  if (!account) return <p className="p-msg-meta" style={{ textAlign: "center", padding: 24 }}>Loading…</p>;
+
+  const progress = account.next_tier ? account.balance / (account.balance + account.next_tier.points_needed) : 1;
+
+  return (
+    <div className="stack-sm">
+      <div className="p-balance">
+        <div className="row-between">
+          <span className="lbl">Points</span>
+          <span className="p-tier">{account.tier}</span>
+        </div>
+        <div className="amt">{account.balance.toLocaleString("en-NG")}</div>
+        <div className="p-progress" aria-hidden><span style={{ width: `${Math.round(progress * 100)}%` }} /></div>
+        <div className="lbl" style={{ marginTop: 6 }}>
+          {account.next_tier ? `${account.next_tier.points_needed} points to ${account.next_tier.name}` : "Top tier"}
+        </div>
+      </div>
+
+      {redeemed && <div className="p-ok">Redeemed {redeemed}.</div>}
+      {redeemState.error && <div className="p-alert">{redeemState.error.message}</div>}
+
+      <div className="p-section">Redeem</div>
+      {catalogue.data?.catalogue.map((r) => (
+        <div key={r.id} className="p-card row-between">
+          <span>
+            <span className="p-msg-title" style={{ fontSize: 14 }}>{r.name}</span>
+            <span className="p-msg-meta" style={{ display: "block" }}>{r.points} points</span>
+          </span>
+          <button
+            type="button"
+            className="p-btn p-btn-primary"
+            style={{ width: "auto", padding: "0 14px", height: 34 }}
+            disabled={account.balance < r.points || redeemState.loading}
+            onClick={async () => {
+              resetRedeem();
+              setRedeemed(null);
+              if (await redeem(customerRef, r.id)) {
+                setRedeemed(r.name);
+                onChanged();
+              }
+            }}
+          >
+            Redeem
+          </button>
+        </div>
+      ))}
+
+      <div className="p-section">Ways to earn</div>
+      <div className="p-card">
+        <div className="row-between p-earn"><span>Turn on personalised offers</span><span className="p-tag">50</span></div>
+        <div className="row-between p-earn"><span>Give feedback on an offer</span><span className="p-tag">5</span></div>
+      </div>
+    </div>
+  );
+}
+

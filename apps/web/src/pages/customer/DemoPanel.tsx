@@ -5,7 +5,7 @@ import { Badge, Button, Card, Empty, ErrorNote, Field, Loading, OutcomeBadge, Re
 import { useApi } from "../../lib/context";
 import { fmtDateTime, fromLocalInput, humanize, shiftDays, toLocalInput } from "../../lib/format";
 import { useAction, useEventLog, useQuery, useStream } from "../../lib/hooks";
-import { PERSONAS } from "../../lib/personas";
+import { PERSONAS, segmentLabel } from "../../lib/personas";
 import { useProductNames } from "../../lib/products";
 import type { ApiError } from "../../lib/api";
 import { PATTERNS, type Customer, type EvalMode, type Pattern, type SimState } from "../../lib/types";
@@ -31,11 +31,11 @@ export function DemoPanel({ customer }: { customer: Customer }) {
 
   return (
     <div className="stack">
-      <Card title="You are" endpoint="GET /customers/{ref}" actions={<Simulated />}>
+      <Card title="Customer" endpoint="GET /customers/{ref}" actions={<Simulated />}>
         <div className="grid-2 small">
           <div><div className="faint">Customer ref</div><code>{p.customer_ref}</code></div>
-          <div><div className="faint">Persona</div>{PERSONAS[p.persona]?.label ?? p.persona}</div>
-          <div><div className="faint">Segment</div>{humanize(p.segment)} · age {p.age_band}</div>
+          <div><div className="faint">Profile</div>{p.persona ? PERSONAS[p.persona].label : p.story ?? segmentLabel(p.segment)}</div>
+          <div><div className="faint">Segment</div>{segmentLabel(p.segment)} · age {p.age_band}</div>
           <div><div className="faint">Holds</div>{p.holdings.map(productName).join(", ")}</div>
         </div>
       </Card>
@@ -47,8 +47,7 @@ export function DemoPanel({ customer }: { customer: Customer }) {
       <InjectCard customerRef={ref} />
 
       <Card
-        title="My decisions"
-        sub="Every decision about you, including the ones that ended in silence."
+        title="Decisions"
         endpoint={["GET /decisions?customer_ref", "GET /decisions/{id}"]}
         actions={<Button size="sm" variant="ghost" onClick={decisions.reload}>Refresh</Button>}
         bodyClass=""
@@ -58,7 +57,7 @@ export function DemoPanel({ customer }: { customer: Customer }) {
         ) : decisions.error ? (
           <div className="card-body"><ErrorNote error={decisions.error} /></div>
         ) : !decisions.data?.items.length ? (
-          <Empty title="No decisions yet">Run the pipeline above.</Empty>
+          <Empty title="No decisions yet" />
         ) : (
           <div className="table-wrap">
             <table className="table">
@@ -71,7 +70,7 @@ export function DemoPanel({ customer }: { customer: Customer }) {
                     <td className="small">{fmtDateTime(d.as_of)}</td>
                     <td><OutcomeBadge outcome={d.outcome} /></td>
                     <td><div className="row">{d.reasons.map((r) => <ReasonChip key={r} code={r} />)}</div></td>
-                    <td className="small">{d.product_id ? humanize(d.product_id) : "—"}</td>
+                    <td className="small">{productName(d.product_id) || "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -146,16 +145,15 @@ function EvaluateCard({ customerRef, clock }: { customerRef: string; clock: stri
 
   return (
     <Card
-      title="Run the pipeline for me"
-      sub="Consent gate, triggers, matching, hard rules, uplift, explainer, delivery."
+      title="Evaluate"
       endpoint="POST /decisions/evaluate"
     >
       <div className="stack">
         <div className="grid-2">
-          <Field label="As of (simulated clock, WAT)" hint="Move time forward to test caps, gaps and cooldowns.">
+          <Field label="As of (WAT)">
             <input className="input" type="datetime-local" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
           </Field>
-          <Field label="Mode" hint={mode === "live" ? "Delivers to the phone if the outcome is send." : "Records the decision, delivers nothing."}>
+          <Field label="Mode" hint={mode === "live" ? "Delivers on send." : "Records only."}>
             <Segmented
               label="Mode"
               value={mode}
@@ -185,7 +183,7 @@ function InjectCard({ customerRef }: { customerRef: string }) {
   const [pattern, setPattern] = useState<Pattern>("salary_pattern");
   const [inject, state] = useAction(api.simInject);
   return (
-    <Card title="Plant a pattern in my transactions" sub="Gives the detector something new to find on the next run." endpoint="POST /sim/inject">
+    <Card title="Inject pattern" endpoint="POST /sim/inject">
       <div className="row">
         <select className="select" style={{ width: "auto" }} value={pattern} onChange={(e) => setPattern(e.target.value as Pattern)}>
           {PATTERNS.map((p) => <option key={p} value={p}>{humanize(p)}</option>)}

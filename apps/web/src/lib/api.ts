@@ -1,12 +1,19 @@
 import { ApiError } from "./errors";
 import { getMode } from "./mode";
-import { mockRequest, mockSubscribe } from "./mock";
+import { mockKnowsCustomer, mockRecordDecision, mockRequest, mockSubscribe } from "./mock";
 import { KEYS, load } from "./storage";
 import {
   STREAM_EVENTS,
   type AuditEntry,
   type AuthResponse,
   type BatchResult,
+  type Channel,
+  type ForYou,
+  type MessageStatus,
+  type MetricsByChannel,
+  type RedeemResult,
+  type RewardItem,
+  type RewardsAccount,
   type CampaignRequest,
   type CampaignRequestInput,
   type Consent,
@@ -49,13 +56,14 @@ export interface RequestOptions {
   body?: unknown;
   query?: Query;
   role?: Role;
+  headers?: Record<string, string>;
 }
 
 function token(): string | undefined {
   return load<AuthResponse | null>(KEYS.session, null)?.token;
 }
 
-async function liveRequest<T>(path: string, { method = "GET", body, query, role }: RequestOptions) {
+async function liveRequest<T>(path: string, { method = "GET", body, query, role, headers }: RequestOptions) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined && v !== "") qs.set(k, String(v));
   const url = `${API_BASE}${path}${qs.size ? `?${qs}` : ""}`;
@@ -68,6 +76,7 @@ async function liveRequest<T>(path: string, { method = "GET", body, query, role 
         "Content-Type": "application/json",
         ...(role ? { "X-Role": role } : {}),
         ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
+        ...headers,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -83,14 +92,142 @@ async function liveRequest<T>(path: string, { method = "GET", body, query, role 
   return data as T;
 }
 
+// ---- Live where ready ----
+// In live mode every call goes to the API first. If the API has no such route yet, the call
+// falls back to the mock, so the app keeps working while endpoints land one by one.
+
+export type Served = "live" | "mock";
+const served = new Map<string, Served>();
+const servedListeners = new Set<() => void>();
+
+/** "POST /decisions/{id}/approve" style key, so IDs don't multiply entries. */
+function routeKey(method: string, path: string): string {
+  return `${method} ${path.replace(/\/(cus|dec|msg|pol|prd|cr|exp)_\w+/g, (_, p) => `/{${p === "cus" ? "ref" : "id"}}`)}`;
+}
+
+function markServed(method: string, path: string, by: Served) {
+  const key = routeKey(method, path);
+  if (served.get(key) === by) return;
+  served.set(key, by);
+  servedListeners.forEach((l) => l());
+}
+
+/** Which endpoints were answered by the live API and which fell back to the mock, this session. */
+export function servedEndpoints(): [string, Served][] {
+  return [...served.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+export function onServedChange(listener: () => void): () => void {
+  servedListeners.add(listener);
+  return () => servedListeners.delete(listener);
+}
+
+/** The API answered "no such route" (not a domain 404 like CUSTOMER_NOT_FOUND). */
+const isMissingRoute = (e: ApiError) => (e.status === 404 && e.code === "NOT_FOUND") || e.status === 405;
+
+function customerRefOf(path: string, body: unknown): string | undefined {
+  const fromBody = (body as { customer_ref?: unknown } | undefined)?.customer_ref;
+  return typeof fromBody === "string" ? fromBody : path.match(/\/customers\/(cus_\w+)/)?.[1];
+}
+
+// The API's shapes for a few customer endpoints differ from the contract in types.ts.
+// These adapters map them; remove each once the API returns the contract shape.
+type ApiInboxMessage = {
+  id: string;
+  sent_at: string;
+  channel: Channel;
+  product_id: string;
+  title: string;
+  body: string;
+  status: string;
+  response: string | null;
+};
+
+const INBOX_STATUS: Record<string, MessageStatus> = {
+  sent: "delivered",
+  delivered: "delivered",
+  queued: "scheduled",
+  scheduled: "scheduled",
+  opened: "opened",
+  accepted: "accepted",
+  not_now: "not_now",
+  cancelled: "cancelled",
+};
+
+function adapt(path: string, result: unknown): unknown {
+  const inbox = path.match(/^\/customers\/(cus_\w+)\/inbox$/);
+  if (inbox && result && Array.isArray((result as { messages?: unknown }).messages)) {
+    const messages = (result as { messages: ApiInboxMessage[] }).messages;
+    return {
+      items: messages.map(
+        (m): Message => ({
+          id: m.id,
+          decision_id: "",
+          customer_ref: inbox[1],
+          product_id: m.product_id,
+          channel: m.channel,
+          title: m.title,
+          body: m.body,
+          why: "",
+          delivered_at: m.sent_at,
+          status: INBOX_STATUS[m.response ?? m.status] ?? "delivered",
+          simulated: true,
+        }),
+      ),
+      next_cursor: null,
+    } satisfies Page<Message>;
+  }
+  const why = path.match(/^\/messages\/(msg_\w+)\/why$/);
+  if (why && result && "reason" in (result as object)) {
+    const r = result as { message_id: string; reason: string; data_used?: { kind: string }[]; consent_url?: string };
+    return {
+      message_id: r.message_id,
+      why: r.reason,
+      data_categories: (r.data_used ?? []).map((d) => d.kind),
+      consent_url: r.consent_url ?? "",
+    } satisfies WhyResponse;
+  }
+  return result;
+}
+
+/** Live decisions are copied into the mock store until GET /decisions exists. */
+function mirror(path: string, result: unknown) {
+  if (path === "/decisions/evaluate") mockRecordDecision(result as Decision);
+  if (path === "/decisions/batch") (result as BatchResult).decisions.forEach(mockRecordDecision);
+}
+
+async function liveWhereReady<T>(path: string, options: RequestOptions): Promise<T> {
+  const method = options.method ?? "GET";
+  try {
+    const result = adapt(path, await liveRequest<T>(path, options)) as T;
+    markServed(method, path, "live");
+    mirror(path, result);
+    return result;
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e;
+    const ref = customerRefOf(path, options.body);
+    // A customer created by the mock's sign-up is unknown to the API until /auth/signup exists
+    const mockOnlyCustomer = e.code === "CUSTOMER_NOT_FOUND" && ref !== undefined && mockKnowsCustomer(ref);
+    if (!isMissingRoute(e) && !mockOnlyCustomer) {
+      markServed(method, path, "live");
+      throw e;
+    }
+    markServed(method, path, "mock");
+    return mockRequest<T>(path, options);
+  }
+}
+
 export function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  return getMode() === "mock" ? mockRequest<T>(path, options) : liveRequest<T>(path, options);
+  return getMode() === "mock" ? mockRequest<T>(path, options) : liveWhereReady<T>(path, options);
 }
 
 /** Subscribes to GET /stream (SSE). Returns an unsubscribe function. */
 export function subscribe(onEvent: (event: StreamEvent) => void): () => void {
-  if (getMode() === "mock") return mockSubscribe(onEvent);
+  const unsubscribeMock = mockSubscribe(onEvent);
+  if (getMode() === "mock") return unsubscribeMock;
 
+  // Live mode still hears mock events, which cover endpoints that fell back to the mock.
+  // Until the API has /stream, the EventSource gets a 404 and closes without retrying.
   const source = new EventSource(`${API_BASE}/stream`);
   const handlers = STREAM_EVENTS.map((type) => {
     const handler = (e: MessageEvent) => {
@@ -101,6 +238,7 @@ export function subscribe(onEvent: (event: StreamEvent) => void): () => void {
     return [type, handler] as const;
   });
   return () => {
+    unsubscribeMock();
     for (const [type, handler] of handlers) source.removeEventListener(type, handler);
     source.close();
   };
@@ -142,6 +280,7 @@ export function createApi(role: Role) {
     // 5.3 Console
     metricsOverview: () => get<MetricsOverview>("/metrics/overview"),
     metricsByProduct: () => get<{ items: ProductMetrics[]; simulated: true }>("/metrics/by-product"),
+    metricsByChannel: () => get<MetricsByChannel>("/metrics/by-channel"),
     policies: () => get<PolicyList>("/policies"),
     savePolicy: (draft: PolicyDraft) => put<Policy>("/policies", draft),
     approvePolicy: (version: string) => post<Policy>(`/policies/${version}/approve`),
@@ -153,6 +292,19 @@ export function createApi(role: Role) {
     campaign: (id: string) => get<CampaignRequest>(`/campaign-requests/${id}`),
     auditLog: () => get<Page<AuditEntry>>("/audit/log"),
     auditExport: () => get<{ entries: AuditEntry[]; exported_at: string }>("/audit/export"),
+
+    // Phone: recommendations and rewards
+    forYou: (ref: string) => get<ForYou>(`/customers/${ref}/for-you`),
+    rewards: (ref: string) => get<RewardsAccount>(`/customers/${ref}/rewards`),
+    rewardsCatalogue: () => get<{ catalogue: RewardItem[]; simulated: true }>("/rewards/catalogue"),
+    redeem: (ref: string, rewardId: string) =>
+      request<RedeemResult>(`/customers/${ref}/rewards/redeem`, {
+        role,
+        method: "POST",
+        body: { reward_id: rewardId },
+        // A fresh key per tap; a retry of the same tap would reuse it
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+      }),
 
     // 5.4 Demo control and evidence
     simStart: (config: SimConfig) => post<SimState>("/sim/start", config),
