@@ -18,6 +18,7 @@ from matchpoint.adapters.rewards.connector import SimRewardsFulfilment
 from matchpoint.adapters.transactions.connector import FlexcubeTransactionFeed
 from matchpoint.clock import WAT, Clock
 from matchpoint.config import Settings, get_settings
+from matchpoint.customer.message_log import message_store
 from matchpoint.ledger.decision_log import DecisionLog
 from matchpoint.models import Channel
 from matchpoint.pipeline.policy import DEFAULT_POLICY, Policy
@@ -44,6 +45,7 @@ class Adapters:
     profile: object
     catalogue: object
     rewards: object
+    message_store: object
     hasher: RefHasher
     access_log: AccessLog
 
@@ -84,6 +86,7 @@ def build_adapters(settings: Settings, seed: int, clock: Clock) -> Adapters:
         profile=purpose_filtered(profile_connector, "CustomerProfile", access, clock),
         catalogue=purpose_filtered(catalogue_connector, "ProductCatalogue", access, clock),
         rewards=purpose_filtered(rewards_connector, "RewardsFulfilment", access, clock),
+        message_store=message_store,
         hasher=hasher,
         access_log=access,
     )

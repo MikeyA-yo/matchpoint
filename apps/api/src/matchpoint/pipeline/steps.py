@@ -9,6 +9,7 @@ write the message, check it and deliver it.
 from __future__ import annotations
 
 from matchpoint.models import OutboundMessage
+from matchpoint.customer.message_log import StoredMessage
 from matchpoint.pipeline import rules
 from matchpoint.pipeline.context import Context, ScoredProduct
 from matchpoint.pipeline.detector import detect_signals
