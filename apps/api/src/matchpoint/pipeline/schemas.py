@@ -14,8 +14,8 @@ from pydantic import BaseModel, Field, field_validator
 from matchpoint.adapters.refs import is_customer_ref
 from matchpoint.models import Channel
 
-Outcome = Literal["send", "hold", "silent", "review"]
-EvalMode = Literal["live", "dry_run"]
+Outcome = Literal["send", "hold", "silent", "review", "shown"]
+EvalMode = Literal["live", "dry_run", "shown"]
 
 ReasonCode = Literal[
     "OK",
