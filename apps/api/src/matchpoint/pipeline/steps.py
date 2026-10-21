@@ -259,6 +259,23 @@ def pick_one(ctx: Context) -> StepResult:
             outcome="hold",
         )
 
+    remaining = ctx.policy.max_messages_per_30d - ctx.log.contacts_since(
+        ctx.customer_ref, ctx.as_of
+    )
+    ctx.trace.check(
+        "ATTENTION_BUDGET",
+        remaining > 0,
+        f"{remaining} of {ctx.policy.max_messages_per_30d} left",
+    )
+    if remaining <= 0:
+        return StepResult(
+            7,
+            "pick_one",
+            "ATTENTION_BUDGET",
+            "The customer's attention budget is spent.",
+            outcome="hold",
+        )
+
     winner = above[0]
     ctx.product = winner.product
     ctx.channel = winner.channel
