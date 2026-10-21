@@ -33,7 +33,9 @@ class CustomerProfileImpl:
             found = None
         return RefExists(customer_ref=customer_ref, exists=found is not None)
 
-    def update_holdings(self, customer_ref: str, holdings: list[str]) -> Profile:
+    def update_holdings(
+        self, customer_ref: str, holdings: list[str], *, purpose: Purpose
+    ) -> Profile:
         found = self._transport.read(customer_ref)
         if found is None:
             raise CustomerNotFound("CustomerProfile", f"unknown {customer_ref}")

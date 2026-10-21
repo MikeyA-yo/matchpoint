@@ -13,11 +13,10 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from matchpoint.clock import WAT
-from matchpoint.customer.message_log import message_store
 from matchpoint.models import Consent
 from matchpoint.wiring import get_runtime
 

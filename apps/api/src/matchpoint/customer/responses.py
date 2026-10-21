@@ -82,4 +82,4 @@ def _add_holding(runtime, customer_ref: str, product_id: str) -> None:
     holdings = list(profile.holdings)
     if product_id not in holdings:
         holdings.append(product_id)
-        runtime.adapters.profile.update_holdings(customer_ref, holdings)
+        runtime.adapters.profile.update_holdings(customer_ref, holdings, purpose="marketing")
