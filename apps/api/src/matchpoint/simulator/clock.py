@@ -2,6 +2,9 @@
 
 from datetime import datetime, timedelta
 
+# This module is the one place a wall clock would ever be used, so TID251 wouldn't
+# otherwise apply here. It isn't used today; set/advance are the public API.
+
 
 class SimClock:
     def __init__(self, start: datetime):
