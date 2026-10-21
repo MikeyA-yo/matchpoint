@@ -41,6 +41,15 @@ class ScoredProduct:
     scheduled_for: datetime | None = None
 
 
+@dataclass(frozen=True)
+class Delivery:
+    """What step 10 handed to the gateway, kept until the decision is recorded."""
+
+    message_id: str
+    at: datetime
+    status: str
+
+
 @dataclass
 class Context:
     customer_ref: str
@@ -57,6 +66,8 @@ class Context:
     # Where step 10 and the log append publish their events. None in tests and in code
     # that only exercises the pipeline.
     events: EventBus | None = None
+    # Set by step 10 so the decision is emitted before the message it produced.
+    delivered: Delivery | None = None
 
     consent: Consent | None = None
     profile: Profile | None = None

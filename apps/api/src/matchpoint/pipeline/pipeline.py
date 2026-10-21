@@ -90,7 +90,7 @@ def _finish(ctx: Context, result: StepResult) -> Decision:
 
 
 def _record(ctx: Context, decision: Decision) -> Decision:
-    """Write the decision once and tell the stream. A repeated ID is not a new event."""
+    """Write the decision once and tell the stream: the decision first, its message next."""
     is_new = ctx.log.get(decision.id) is None
     stored = ctx.log.append(decision)
     if is_new and ctx.events is not None:
@@ -107,4 +107,18 @@ def _record(ctx: Context, decision: Decision) -> Decision:
                 mode=decision.mode,
             )
         )
+        delivered = ctx.delivered
+        if delivered is not None:
+            ctx.events.publish(
+                stream_event(
+                    "message_delivered",
+                    at=delivered.at.isoformat(),
+                    customer_ref=decision.customer_ref,
+                    message_id=delivered.message_id,
+                    decision_id=decision.id,
+                    product_id=decision.product_id,
+                    channel=decision.channel,
+                    status=delivered.status,
+                )
+            )
     return stored

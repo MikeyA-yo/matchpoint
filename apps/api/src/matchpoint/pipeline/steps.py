@@ -9,10 +9,9 @@ write the message, check it and deliver it.
 from __future__ import annotations
 
 from matchpoint.customer.message_log import StoredMessage
-from matchpoint.events.schemas import stream_event
 from matchpoint.models import OutboundMessage
 from matchpoint.pipeline import rules
-from matchpoint.pipeline.context import Context, ScoredProduct
+from matchpoint.pipeline.context import Context, Delivery, ScoredProduct
 from matchpoint.pipeline.detector import detect_signals
 from matchpoint.pipeline.explainer import explain
 from matchpoint.pipeline.guardrail import run_checks
@@ -395,21 +394,9 @@ def deliver(ctx: Context) -> StepResult:
             sent_at=receipt.at,
         )
         ctx.adapters.message_store.append(stored)
-        if ctx.events is not None:
-            ctx.events.publish(
-                stream_event(
-                    "message_delivered",
-                    at=receipt.at.isoformat(),
-                    customer_ref=msg.customer_ref,
-                    message_id=msg.id,
-                    decision_id=decision_id(
-                        ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode, ctx.epoch
-                    ),
-                    product_id=ctx.product.id,
-                    channel=msg.channel,
-                    status=receipt.status,
-                )
-            )
+        ctx.delivered = Delivery(
+            message_id=msg.id, at=receipt.at, status=receipt.status
+        )
         return StepResult(
             10, "deliver", "OK", f"{ctx.channel}: {receipt.status}"
         )
