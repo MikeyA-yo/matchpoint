@@ -13,15 +13,11 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from matchpoint.customer.message_log import message_store
-from matchpoint.pipeline.context import Context
 from matchpoint.pipeline.detector import detect_signals
 from matchpoint.pipeline.ids import decision_id
 from matchpoint.pipeline.matcher import build_candidates
-from matchpoint.pipeline.pipeline import evaluate
-from matchpoint.pipeline.policy import DEFAULT_POLICY
-from matchpoint.pipeline.schemas import Decision, EvalMode, Outcome, Trace
-from matchpoint.pipeline.trace import TraceBuilder, MODEL_VERSION
+from matchpoint.pipeline.schemas import Decision
+from matchpoint.pipeline.trace import TraceBuilder
 from matchpoint.wiring import get_runtime
 
 router = APIRouter(tags=["customer"])

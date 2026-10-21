@@ -22,9 +22,8 @@ AS_OF = "2026-12-03T09:02:00+01:00"
 
 @pytest.fixture(autouse=True)
 def runtime():
-    wiring.get_runtime.cache_clear()
-    yield wiring.get_runtime()
-    wiring.get_runtime.cache_clear()
+    yield wiring.reset_runtime()
+    wiring.reset_runtime()
 
 
 def post(customer: str, as_of: str = AS_OF, mode: str = "live"):

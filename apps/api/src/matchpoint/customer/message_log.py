@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, get_args
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 Channel = Literal["app", "whatsapp", "sms", "email", "ussd"]
 CHANNELS: tuple[Channel, ...] = get_args(Channel)
@@ -67,6 +67,12 @@ class MessageStore:
 
     def ignored_at(self, customer_ref: str, product_id: str) -> datetime | None:
         return self._ignored_at.get((customer_ref, product_id))
+
+    def clear(self) -> None:
+        """Forget everything. /sim/reset starts a new world."""
+        self._by_id.clear()
+        self._by_customer.clear()
+        self._ignored_at.clear()
 
 
 message_store = MessageStore()

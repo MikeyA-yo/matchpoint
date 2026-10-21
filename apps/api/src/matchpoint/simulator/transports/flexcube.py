@@ -20,6 +20,14 @@ class SimFlexcubeTransport:
         self._by_ref = {
             hasher.ref(c.source_id): (c, accounts[c.source_id]) for c in DEMO_CUSTOMERS
         }
+        # Rows planted by /sim/inject, merged into the next query for that customer.
+        self._planted: dict[str, list[FlexcubeTxnRow]] = {}
+
+    def plant(self, customer_ref: str, rows: list[FlexcubeTxnRow]) -> None:
+        self._planted.setdefault(customer_ref, []).extend(rows)
+
+    def clear_planted(self) -> None:
+        self._planted.clear()
 
     def history_for(
         self, customer_ref: str, start: datetime, end: datetime
@@ -28,4 +36,12 @@ class SimFlexcubeTransport:
         if pair is None:
             raise CustomerNotFound("SimFlexcubeTransport", f"unknown {customer_ref}")
         customer, account_no = pair
-        return generate_rows(customer, account_no, start.date(), end.date(), self._seed)
+        rows = generate_rows(customer, account_no, start.date(), end.date(), self._seed)
+        planted = [
+            row
+            for row in self._planted.get(customer_ref, ())
+            if start <= datetime.fromisoformat(row["TRN_DT"]) < end
+        ]
+        if planted:
+            rows = sorted([*rows, *planted], key=lambda row: row["TRN_DT"])
+        return rows

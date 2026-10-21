@@ -21,5 +21,7 @@ def evaluate_decision(request: EvaluateRequest) -> Decision:
         clock=runtime.clock,
         policy=runtime.policy,
         log=runtime.log,
+        epoch=runtime.sim.epoch_for(request.customer_ref),
+        events=runtime.events,
     )
     return evaluate(ctx)

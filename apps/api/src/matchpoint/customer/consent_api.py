@@ -11,12 +11,10 @@ built).
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from matchpoint.clock import WAT
 from matchpoint.models import Consent
 from matchpoint.wiring import get_runtime
 
@@ -55,7 +53,7 @@ def put_consent(ref: str, request: ConsentRequest):
         customer_ref=ref,
         personalised_offers=request.personalised_offers,
         channels=channels,
-        updated_at=datetime.now(WAT),
+        updated_at=runtime.clock.now(),
         source="api",
     )
     runtime.adapters.consent.set(ref, new_consent, purpose="marketing")
