@@ -15,6 +15,23 @@ export const CHANNELS: Channel[] = ["app", "whatsapp", "sms", "ussd", "email"];
 export const CONTACT_CHANNELS: Channel[] = ["app", "whatsapp", "sms", "ussd"];
 export const STAFF_ROLES: Role[] = ["product_owner", "campaign_manager", "compliance", "dpo"];
 export const PATTERNS: Pattern[] = ["salary_pattern", "fee_season", "sme_growth"];
+// Account events the sandbox can post for one customer (POST /sim/activity)
+export type ActivityKind = "salary" | "school_fees" | "pos_sales" | "dollar_payment" | "bills";
+export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
+  salary: "Salary received",
+  school_fees: "School fees paid",
+  pos_sales: "POS sales received",
+  dollar_payment: "Dollar payment online",
+  bills: "DSTV and power paid",
+};
+/** The pattern the API's /sim/inject plants for each activity, where it has one. */
+export const ACTIVITY_PATTERN: Record<ActivityKind, Pattern | null> = {
+  salary: "salary_pattern",
+  school_fees: "fee_season",
+  pos_sales: "sme_growth",
+  dollar_payment: null,
+  bills: null,
+};
 
 export const REASONS = {
   OK: { meaning: "Passed every check", effect: "send" },
@@ -248,6 +265,8 @@ export interface Message {
   why: string;
   delivered_at: string;
   status: MessageStatus;
+  // Illustrative benefit for savings products; the API puts it in the body instead
+  gain?: Gain | null;
   simulated: true;
 }
 
@@ -300,12 +319,19 @@ export interface MetricsByChannel {
 
 // ---- For you (GET /customers/{ref}/for-you) ----
 
+export interface Gain {
+  amount_ngn: number;
+  period_months: number;
+  basis: string;
+  example_rate?: boolean;
+}
+
 export interface ForYouItem {
   rank: number;
   product_id: string;
   name: string;
   why: string;
-  gain: { amount_ngn: number; period_months: number; basis: string; example_rate?: boolean } | null;
+  gain: Gain | null;
   key_facts: string[];
   compare: { product_id: string; when_it_fits: string }[];
 }
@@ -315,6 +341,35 @@ export interface ForYou {
   items: ForYouItem[];
   note: string | null;
   simulated: true;
+}
+
+// ---- Account (GET /customers/{ref}/transactions) ----
+
+// Same kinds as the API's Txn model (apps/api/src/matchpoint/models.py)
+export type TxnKind = "salary" | "nip_in" | "nip_out" | "pos" | "atm" | "bill" | "airtime" | "charge" | "stamp_duty" | "reversal" | "other";
+
+export interface Transaction {
+  id: string;
+  customer_ref: string;
+  at: string;
+  direction: "credit" | "debit";
+  kind: TxnKind;
+  amount_kobo: number;
+  currency: string;
+  narration: string;
+  simulated: true;
+}
+
+export interface TransactionPage extends Page<Transaction> {
+  account_no: string;
+  balance_kobo: number;
+}
+
+export interface ActivityResult {
+  customer_ref: string;
+  kind: ActivityKind;
+  transactions: Transaction[];
+  balance_kobo: number;
 }
 
 // ---- Rewards ----
@@ -425,7 +480,8 @@ export type StreamEventType =
   | "policy_changed"
   | "points_awarded"
   | "tier_changed"
-  | "points_redeemed";
+  | "points_redeemed"
+  | "transaction_posted";
 
 export const STREAM_EVENTS: StreamEventType[] = [
   "decision_created",
@@ -436,6 +492,7 @@ export const STREAM_EVENTS: StreamEventType[] = [
   "points_awarded",
   "tier_changed",
   "points_redeemed",
+  "transaction_posted",
 ];
 
 export interface StreamEvent {

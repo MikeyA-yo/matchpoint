@@ -105,12 +105,13 @@ export function Simulated() {
 }
 
 export function ErrorNote({ error }: { error?: ApiError }) {
+  const { technical } = useTechnical();
   if (!error) return null;
   return (
     <div className="alert alert-error" role="alert">
       <div>
-        <strong>{error.code}</strong> {error.message}
-        {error.traceId && <div className="small"><code>{error.traceId}</code></div>}
+        {technical && <strong>{error.code}</strong>} {error.message}
+        {technical && error.traceId && <div className="small"><code>{error.traceId}</code></div>}
       </div>
     </div>
   );

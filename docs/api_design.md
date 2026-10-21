@@ -562,7 +562,9 @@ The web app defaults to its in-browser mock backend. Turning on Developer view a
 | `GET /decisions`, review approve/reject | Not implemented | Mock. Live `evaluate` results are copied into the mock store so the decision log, review queue and message log show them. Approving there does not reach the API, so an approved credit offer never lands in the live inbox |
 | `GET /metrics/by-product` | Not implemented | No longer used; the overview shows by-channel |
 | Policies, products, campaigns, audit, experiments, model | Not implemented | Mock |
-| Stream | Eight event types | All eight handled, including `points_awarded`, `tier_changed`, `points_redeemed` |
+| Stream | Eight event types | All eight handled, including `points_awarded`, `tier_changed`, `points_redeemed`. The mock adds a ninth, `transaction_posted` |
+| `GET /customers/{ref}/transactions`, `POST /sim/activity` | Not implemented | Mock (see ask 6). The phone's balance and history come from the mock; the sandbox buttons post activity there, then call the API's `/sim/inject` and `evaluate` |
+| Message `gain` | Not returned; the gain is in the body | The phone shows the body as the benefit when there is no `gain` |
 
 Asks for the API, in demo order:
 
@@ -571,6 +573,10 @@ Asks for the API, in demo order:
 3. Invalidate cached decisions when consent changes. Today, after Stop offers, re-running at the same `as_of` returns the earlier `send`.
 4. Plain-language `why` on for-you items.
 5. Move the simulator catalogue to Zenith's confirmed products. The web mock already uses them (`seedProducts` and `TRIGGERS` in `apps/web/src/lib/mock.ts`: Save4Me, eaZySave Classic and Premium, Fixed Deposit, Domiciliary Account, Virtual card, Zenith Aspire, Zenith Timeless, Salary Advance, Personal Loan, Education Loan, MSME Loan). Until then the web app shows the API's `prd_target_savings` as Save4Me and keeps its other product names; live message copy still says "target savings account".
+6. Account endpoints for the banking-app phone. The web app calls these; the mock implements them (`apps/web/src/lib/mockAccount.ts`):
+   - `GET /customers/{ref}/transactions?limit&cursor` returns `Page<Transaction>` plus `account_no` and `balance_kobo`. A `Transaction` is the `Txn` model (`id`, `customer_ref`, `at`, `direction`, `kind`, `amount_kobo`, `currency`, `narration`), newest first. This is the customer's own account view, so it is not purpose-filtered or consent-gated.
+   - `POST /sim/activity` `{ customer_ref, kind, at? }`, with `kind` one of `salary`, `school_fees`, `pos_sales`, `dollar_payment`, `bills`. It posts the rows at `at` (default: the sim clock), bumps the customer's epoch and emits `transaction_posted` `{ customer_ref, kind, count, balance_kobo }`. It returns `{ customer_ref, kind, transactions, balance_kobo }`, or 409 `INSUFFICIENT_FUNDS` if a payment is more than the balance. The rows should feed detection the same way `/sim/inject` patterns do, which would cover `international_spend` and `recurring_bill_pattern` too.
+   - Optional: `gain` (`{ amount_ngn, period_months, basis }`) on inbox messages, so the phone can show the benefit apart from the body.
 
 ## 8. Not built (design backlog)
 

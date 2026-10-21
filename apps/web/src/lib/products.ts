@@ -20,6 +20,13 @@ const KNOWN_NAMES: Record<string, string> = {
   prd_talk_loans: "Talk to us about loans",
 };
 
+/** Returns a lookup from product ID to its catalogue entry, if the catalogue has it. */
+export function useProduct() {
+  const api = useApi();
+  const products = useQuery(() => api.products(), []);
+  return useCallback((id: string | null | undefined) => products.data?.items.find((p) => p.id === id), [products.data]);
+}
+
 /** Returns a lookup from product ID to its customer-facing name. */
 export function useProductNames() {
   const api = useApi();

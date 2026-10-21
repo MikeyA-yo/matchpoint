@@ -1,8 +1,9 @@
 import { Navigate, useLocation } from "react-router";
 import { ApiProvider, useSession, useTechnical } from "../../lib/context";
-import { CustomerPanel, SandboxBar } from "./CustomerPanel";
+import { CustomerPanel } from "./CustomerPanel";
 import { DemoPanel } from "./DemoPanel";
 import { Phone } from "./Phone";
+import { SimulatePanel } from "./SimulatePanel";
 
 export function CustomerPage() {
   const { session } = useSession();
@@ -13,13 +14,17 @@ export function CustomerPage() {
   const customer = session.customer;
   return (
     <ApiProvider role="customer">
-      <SandboxBar customerRef={customer.customer_ref} />
       <main className="container">
         <div className="customer-layout">
           <div className="phone-col">
             <Phone customer={customer} />
           </div>
-          {technical ? <DemoPanel customer={customer} /> : <CustomerPanel customer={customer} />}
+          <div className="customer-side">
+            <div className="customer-sim">
+              <SimulatePanel customerRef={customer.customer_ref} />
+            </div>
+            {technical ? <DemoPanel customer={customer} /> : <CustomerPanel customer={customer} />}
+          </div>
         </div>
       </main>
     </ApiProvider>

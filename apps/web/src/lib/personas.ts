@@ -57,12 +57,16 @@ export const DEMO_CUSTOMERS: (Seed & {
   complaint_open?: boolean;
   // Shown under the name on the sign-in screen
   note: string;
+  // Salary the API's simulator pays on the 25th, for the mock's transaction history
+  employer?: string;
+  salary_ngn?: number;
 })[] = [
   {
     key: "adaeze", name: "Adaeze Okafor", ref: "cus_231e711a96dd", phone: "08010000001",
     age_band: "25-34", segment: "salaried", holdings: ["current_account"],
     channels: { ...ALL_OFF, app: true, whatsapp: true, email: true }, personalised_offers: true,
     triggers: ["salary_regular", "surplus"], uplift: 1,
+    employer: "FLUTTERWAVE NG", salary_ngn: 850_000,
     note: "Salaried · Lagos",
   },
   {
@@ -77,6 +81,7 @@ export const DEMO_CUSTOMERS: (Seed & {
     age_band: "35-44", segment: "salaried", holdings: ["current_account", "savings_account"],
     channels: { ...ALL_OFF, app: true, whatsapp: true, sms: true, email: true }, personalised_offers: true,
     triggers: ["salary_regular", "fee_season"], uplift: 1,
+    employer: "FEDERAL CIVIL SERVICE", salary_ngn: 620_000,
     note: "Salaried · Abuja",
   },
   {
@@ -91,6 +96,7 @@ export const DEMO_CUSTOMERS: (Seed & {
     age_band: "45-54", segment: "salaried", holdings: ["current_account", "savings_account", "personal_loan"],
     channels: { ...ALL_OFF, app: true, sms: true, email: true }, personalised_offers: true,
     triggers: ["salary_regular", "recurring_bill_pattern"], uplift: 0.25,
+    employer: "ZENITH BANK PLC", salary_ngn: 1_450_000,
     note: "Salaried · Lagos",
   },
   {
@@ -105,6 +111,7 @@ export const DEMO_CUSTOMERS: (Seed & {
     age_band: "35-44", segment: "salaried", holdings: ["current_account"],
     channels: { ...ALL_OFF, app: true, whatsapp: true, sms: true, email: true }, personalised_offers: true,
     complaint_open: true, triggers: ["salary_regular"], uplift: 1,
+    employer: "LAGOS STATE GOVT", salary_ngn: 480_000,
     note: "Salaried · Kaduna",
   },
 ];

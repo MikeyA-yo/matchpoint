@@ -17,6 +17,9 @@ export const fmtDay = (iso: string, long = false) => (long ? longDay : day).form
 export const fmtDateTime =(iso?: string | null) => (iso ? dateTime.format(new Date(iso)) : "—");
 export const fmtTime = (iso?: string | null) => (iso ? time.format(new Date(iso)) : "—");
 export const fmtNum = (n: number) => n.toLocaleString("en-NG");
+/** 4500000 kobo -> ₦45,000.00 */
+export const fmtKobo = (kobo: number) =>
+  `₦${(kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const fmtPct = (n: number, dp = 1) => `${(n * 100).toFixed(dp)}%`;
 
 /** salary_regular -> Salary regular */

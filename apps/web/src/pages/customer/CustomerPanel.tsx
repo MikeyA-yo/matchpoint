@@ -1,18 +1,10 @@
-import { useEffect, useState } from "react";
-import { Button, Card, Empty, ErrorNote, Loading } from "../../components/ui";
+import { Card, Empty, ErrorNote, Loading } from "../../components/ui";
 import { useApi } from "../../lib/context";
 import { describeDecision, type PlainDecision } from "../../lib/describe";
-import { CHANNEL_LABEL, fmtDay, fmtTime, shiftDays } from "../../lib/format";
-import { useAction, useQuery, useStream } from "../../lib/hooks";
+import { CHANNEL_LABEL, fmtDay } from "../../lib/format";
+import { useQuery, useStream } from "../../lib/hooks";
 import { useProductNames } from "../../lib/products";
-import { load, save } from "../../lib/storage";
-import { CONTACT_CHANNELS, type Customer, type Decision, type Pattern } from "../../lib/types";
-
-const EVENTS: { pattern: Pattern; label: string }[] = [
-  { pattern: "salary_pattern", label: "Salary credited" },
-  { pattern: "fee_season", label: "School fees paid" },
-  { pattern: "sme_growth", label: "POS sales up" },
-];
+import { CONTACT_CHANNELS, type Customer, type Decision } from "../../lib/types";
 
 /** Account summary and message log next to the phone. */
 export function CustomerPanel({ customer }: { customer: Customer }) {
@@ -79,94 +71,5 @@ function LogItem({ d, plain }: { d: Decision; plain: PlainDecision }) {
         <span className="small faint" style={{ whiteSpace: "nowrap" }}>{fmtDay(d.as_of)}</span>
       </div>
     </li>
-  );
-}
-
-/** Test-mode toolbar: move the simulated clock, run decisioning, simulate account events. */
-export function SandboxBar({ customerRef }: { customerRef: string }) {
-  const api = useApi();
-  const productName = useProductNames();
-  const sim = useQuery(() => api.simState(), []);
-  const timeKey = `matchpoint.demoTime.${customerRef}`;
-  const [time, setTimeState] = useState<string | null>(() => load<string | null>(timeKey, null));
-  const [last, setLast] = useState<Decision | null>(null);
-  const [start, startState] = useAction(api.simStart);
-  const [run, runState] = useAction(async (at: string, event?: Pattern) => {
-    if (event) await api.simInject(event, customerRef);
-    return api.evaluate(customerRef, "live", at);
-  });
-
-  const setTime = (t: string) => {
-    save(timeKey, t);
-    setTimeState(t);
-  };
-
-  useEffect(() => {
-    if (!time && sim.data?.clock) setTime(sim.data.clock);
-  }, [sim.data?.clock]);
-
-  const go = async (at: string, event?: Pattern) => {
-    const d = await run(at, event);
-    if (d) setLast(d);
-  };
-
-  const paused = sim.data && !sim.data.running;
-  const plain = last ? describeDecision(last, productName(last.product_id)) : null;
-  const busy = !time || runState.loading;
-
-  return (
-    <div className="sandbox-bar" role="toolbar" aria-label="Sandbox controls">
-      <span className="env-tag">Sandbox</span>
-      {paused ? (
-        <>
-          <span className="small muted">Simulation stopped</span>
-          <Button size="sm" variant="primary" loading={startState.loading} onClick={async () => (await start({ seed: 42, n_customers: 5000, days: 120, scenario: "baseline" })) && sim.reload()}>
-            Start
-          </Button>
-        </>
-      ) : (
-        <>
-          <span className="sandbox-date">{time ? `${fmtDay(time, true)}, ${fmtTime(time)}` : "…"}</span>
-          <div className="row" style={{ gap: 6 }}>
-            <Button size="sm" variant="primary" disabled={!time} loading={runState.loading} onClick={() => time && go(time)}>
-              Run decisioning
-            </Button>
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() => {
-                if (!time) return;
-                const next = shiftDays(time, 7);
-                setTime(next);
-                go(next);
-              }}
-            >
-              +1 week
-            </Button>
-            <select
-              className="select input-sm"
-              style={{ width: "auto" }}
-              value=""
-              disabled={busy}
-              aria-label="Simulate an account event"
-              onChange={(e) => time && e.target.value && go(time, e.target.value as Pattern)}
-            >
-              <option value="">Simulate event…</option>
-              {EVENTS.map((ev) => <option key={ev.pattern} value={ev.pattern}>{ev.label}</option>)}
-            </select>
-          </div>
-        </>
-      )}
-      <span className="spacer" />
-      {(runState.error || startState.error || sim.error) && (
-        <span className="small" style={{ color: "var(--red)" }}>{(runState.error ?? startState.error ?? sim.error)?.message}</span>
-      )}
-      {plain && !runState.error && (
-        <span className={`sandbox-result tone-${plain.tone}`} role="status">
-          <span className="activity-dot" aria-hidden />
-          <strong>{plain.status}</strong> <span className="muted">{plain.detail}</span>
-        </span>
-      )}
-    </div>
   );
 }

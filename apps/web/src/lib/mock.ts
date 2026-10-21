@@ -5,14 +5,17 @@
 
 import type { RequestOptions } from "./api";
 import { ApiError } from "./errors";
+import { ACTIVITY_TRIGGER, openAccount, postActivity, type Account } from "./mockAccount";
 import { getMode } from "./mode";
 import { DEMO_CUSTOMERS, DEMO_PASSWORD, PATTERN_TRIGGER, PERSONAS, SEGMENTS } from "./personas";
 import { KEYS, load, save } from "./storage";
 import {
+  ACTIVITY_PATTERN,
   CHANNELS,
   OUTCOME_LABEL,
   REASON_LABEL,
   STAFF_ROLES,
+  type ActivityKind,
   type AuditEntry,
   type CampaignRequest,
   type Candidate,
@@ -43,6 +46,7 @@ import {
   type Strategy,
   type StrategyResult,
   type StreamEvent,
+  type Transaction,
   type Trigger,
 } from "./types";
 
@@ -284,6 +288,8 @@ interface Db {
   model: ModelInfo;
   sim: SimState;
   rewards: Record<string, RewardsLedger>;
+  // Opened on first read (mockAccount.ts)
+  accounts: Record<string, Account>;
   // IDs of decisions copied from the live API (see mockRecordDecision)
   liveDecisionIds: string[];
 }
@@ -321,12 +327,13 @@ function emptyDb(): Db {
     model: { version: "upl_0.3", qini: 0.274, trained_at: "2026-11-30T16:00:00+01:00", simulated: true },
     sim: { running: true, seed: 42, n_customers: 5000, days: 120, scenario: "baseline", clock: START_CLOCK, simulated: true },
     rewards: {},
+    accounts: {},
     liveDecisionIds: [],
   };
 }
 
 function addCustomer(db: Db, customer: Omit<StoredCustomer, "patterns" | "epoch">, consent: ConsentInput, source: string, at: string) {
-  const stored: StoredCustomer = { ...customer, holdings: [...customer.holdings], patterns: [], epoch: 0 };
+  const stored: StoredCustomer = { ...customer, holdings: [...customer.holdings], triggers: [...customer.triggers], patterns: [], epoch: 0 };
   db.customers[stored.customer_ref] = stored;
   writeConsent(db, stored.customer_ref, consent, source, at);
   return stored;
@@ -390,6 +397,7 @@ function seedDb(): Db {
 function loadDb(): Db {
   const db = load<Db | null>(KEYS.mockDb, null) ?? seedDb();
   db.rewards ??= {};
+  db.accounts ??= {};
   db.liveDecisionIds ??= [];
   return db;
 }
@@ -509,6 +517,10 @@ const byPhone = (db: Db, phone: string) => Object.values(db.customers).find((c) 
 
 function getCustomer(db: Db, ref: string): StoredCustomer {
   return db.customers[ref] ?? fail(404, "CUSTOMER_NOT_FOUND", `No customer ${ref}.`);
+}
+
+function accountOf(db: Db, c: StoredCustomer): Account {
+  return (db.accounts[c.customer_ref] ??= openAccount(c, START_CLOCK));
 }
 
 function publicCustomer({ password: _p, patterns: _q, epoch: _e, triggers: _t, uplift: _u, complaint_open: _c, ...c }: StoredCustomer): Customer {
@@ -728,6 +740,7 @@ function deliver(db: Db, d: Decision) {
     title: d.message!.title,
     body: d.message!.body,
     why: d.message!.why,
+    gain: GAINS[d.product_id!] ?? null,
     delivered_at: at,
     // Only quiet hours push a message later than the decision itself
     status: d.scheduled_for ? "scheduled" : "delivered",
@@ -957,6 +970,10 @@ const routes: Route[] = [
     }
     return { personalised: true, items, note: scored.length ? null : "No products fit you now.", simulated: true };
   }],
+  ["GET", /^\/customers\/(cus_\w+)\/transactions$/, ({ db, params, query }) => {
+    const acct = accountOf(db, getCustomer(db, params[0]));
+    return { ...page(acct.transactions, query), account_no: acct.account_no, balance_kobo: acct.balance_kobo };
+  }],
   ["GET", /^\/customers\/(cus_\w+)\/rewards$/, ({ db, params }) => {
     getCustomer(db, params[0]);
     return rewardsView(db, params[0]);
@@ -1090,7 +1107,8 @@ const routes: Route[] = [
     // Keep accounts people signed up with, but reset their history
     for (const [ref, c] of Object.entries(db.customers)) {
       if (!fresh.customers[ref] && c.password) {
-        fresh.customers[ref] = { ...c, holdings: c.persona ? [...PERSONAS[c.persona].holdings] : c.holdings, patterns: [], epoch: 0 };
+        const seed = c.persona ? PERSONAS[c.persona] : c;
+        fresh.customers[ref] = { ...c, holdings: [...seed.holdings], triggers: [...seed.triggers], patterns: [], epoch: 0 };
         fresh.consent[ref] = db.consent[ref];
       }
     }
@@ -1107,6 +1125,26 @@ const routes: Route[] = [
       return { pattern: body.pattern, customer_ref: c.customer_ref, affected: 1 };
     }
     return { pattern: body.pattern, customer_ref: null, affected: Math.round(db.sim.n_customers * 0.05) };
+  }],
+  ["POST", /^\/sim\/activity$/, ({ db, body }) => {
+    const clock = requireSim(db);
+    if (!(body.kind in ACTIVITY_TRIGGER)) fail(422, "VALIDATION_ERROR", "kind must be salary, school_fees, pos_sales, dollar_payment or bills.");
+    const kind = body.kind as ActivityKind;
+    const c = getCustomer(db, body.customer_ref);
+    const acct = accountOf(db, c);
+    let transactions: Transaction[];
+    try {
+      transactions = postActivity(acct, c, kind, body.at || clock);
+    } catch {
+      fail(409, "INSUFFICIENT_FUNDS", "Not enough money in the account for this payment.");
+    }
+    // The same signal the API's /sim/inject plants, so the next decision can use it
+    const pattern = ACTIVITY_PATTERN[kind];
+    if (pattern && !c.patterns.includes(pattern)) c.patterns.push(pattern);
+    if (!pattern && !c.triggers.includes(ACTIVITY_TRIGGER[kind])) c.triggers.push(ACTIVITY_TRIGGER[kind]);
+    invalidate(db, c.customer_ref);
+    emit(db, "transaction_posted", { customer_ref: c.customer_ref, kind, count: transactions.length, balance_kobo: acct.balance_kobo });
+    return { customer_ref: c.customer_ref, kind, transactions, balance_kobo: acct.balance_kobo };
   }],
   ["GET", /^\/sim\/state$/, ({ db }) => db.sim],
   ["POST", /^\/experiments\/run$/, ({ db, body }) => {

@@ -1,7 +1,7 @@
 import { useTechnical } from "../lib/context";
 import { CHANNEL_LABEL, fmtTime } from "../lib/format";
 import { useProductNames } from "../lib/products";
-import { OUTCOME_LABEL, REASON_LABEL, type Channel, type Outcome, type ReasonCode, type StreamEvent } from "../lib/types";
+import { ACTIVITY_LABEL, OUTCOME_LABEL, REASON_LABEL, type ActivityKind, type Channel, type Outcome, type ReasonCode, type StreamEvent } from "../lib/types";
 import { Badge, Empty } from "./ui";
 
 const TONE = {
@@ -13,6 +13,7 @@ const TONE = {
   points_awarded: "green",
   tier_changed: "green",
   points_redeemed: "blue",
+  transaction_posted: "grey",
 } as const;
 
 export const EVENT_LABEL: Record<StreamEvent["type"], string> = {
@@ -24,6 +25,7 @@ export const EVENT_LABEL: Record<StreamEvent["type"], string> = {
   points_awarded: "Points earned",
   tier_changed: "Tier change",
   points_redeemed: "Reward redeemed",
+  transaction_posted: "Account activity",
 };
 
 const EARN_LABEL: Record<string, string> = {
@@ -61,6 +63,8 @@ function technicalSummary(e: StreamEvent): string {
       return `${d.customer_ref}: ${d.from_tier} -> ${d.to_tier}`;
     case "points_redeemed":
       return `${d.customer_ref}: ${d.reward_id} -${d.points} balance ${d.balance}`;
+    case "transaction_posted":
+      return `${d.customer_ref}: ${d.kind} (${d.count} rows) balance_kobo ${d.balance_kobo}`;
   }
 }
 
@@ -87,6 +91,8 @@ function plainSummary(e: StreamEvent, productName: (id: string) => string): stri
       return `${who} · Moved to ${d.to_tier}`;
     case "points_redeemed":
       return `${who} · Redeemed ${d.points} points`;
+    case "transaction_posted":
+      return `${who} · ${ACTIVITY_LABEL[d.kind as ActivityKind] ?? "New transaction"}`;
   }
 }
 

@@ -5,6 +5,8 @@ import { mockKnowsCustomer, mockRecordDecision, mockRequest, mockSubscribe } fro
 import { KEYS, load } from "./storage";
 import {
   STREAM_EVENTS,
+  type ActivityKind,
+  type ActivityResult,
   type AuditEntry,
   type AuthResponse,
   type BatchResult,
@@ -43,6 +45,7 @@ import {
   type SimState,
   type Strategy,
   type StreamEvent,
+  type TransactionPage,
   type WhyResponse,
 } from "./types";
 
@@ -301,7 +304,8 @@ export function createApi(role: Role) {
     auditLog: () => get<Page<AuditEntry>>("/audit/log"),
     auditExport: () => get<{ entries: AuditEntry[]; exported_at: string }>("/audit/export"),
 
-    // Phone: recommendations and rewards
+    // Phone: account, recommendations and rewards
+    transactions: (ref: string, limit = 100) => get<TransactionPage>(`/customers/${ref}/transactions`, { limit }),
     forYou: (ref: string) => get<ForYou>(`/customers/${ref}/for-you`),
     rewards: (ref: string) => get<RewardsAccount>(`/customers/${ref}/rewards`),
     rewardsCatalogue: () => get<{ catalogue: RewardItem[]; simulated: true }>("/rewards/catalogue"),
@@ -320,6 +324,8 @@ export function createApi(role: Role) {
     simInject: (pattern: Pattern, customer_ref?: string) =>
       post<{ pattern: Pattern; customer_ref: string | null; affected: number }>("/sim/inject", { pattern, customer_ref }),
     simState: () => get<SimState>("/sim/state"),
+    simActivity: (customer_ref: string, kind: ActivityKind, at?: string) =>
+      post<ActivityResult>("/sim/activity", { customer_ref, kind, at }),
     runExperiment: (seed: number, strategies: Strategy[], days: number) =>
       post<Experiment>("/experiments/run", { seed, strategies, days }),
     experiment: (id: string) => get<Experiment>(`/experiments/${id}`),
