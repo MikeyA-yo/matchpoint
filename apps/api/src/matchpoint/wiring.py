@@ -23,6 +23,7 @@ from matchpoint.errors import ApiError
 from matchpoint.events.bus import EventBus
 from matchpoint.ledger.decision_log import DecisionLog
 from matchpoint.models import Channel
+from matchpoint.rewards.ledger import RewardsLedger
 from matchpoint.pipeline.policy import DEFAULT_POLICY, Policy
 from matchpoint.simulator import control
 from matchpoint.simulator.clock import SimClock
@@ -115,6 +116,7 @@ class Runtime:
     log: DecisionLog
     sim: control.SimWorld
     events: EventBus
+    rewards: RewardsLedger
 
 
 def build_runtime(
@@ -132,6 +134,7 @@ def build_runtime(
         log=DecisionLog(),
         sim=sim,
         events=events if events is not None else EventBus(),
+        rewards=RewardsLedger(),
     )
 
 

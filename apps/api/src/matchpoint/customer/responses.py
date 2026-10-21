@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from matchpoint.adapters.errors import CustomerNotFound
 from matchpoint.customer.message_log import message_store
 from matchpoint.models import Channel
+from matchpoint.rewards.earn import earn
 from matchpoint.wiring import get_runtime
 
 router = APIRouter(tags=["customer"])
@@ -56,6 +57,16 @@ def respond(message_id: str, request: RespondRequest):
         )
         if msg.product_id:
             message_store.record_ignored(msg.customer_ref, msg.product_id, now)
+        earn(
+            customer_ref=msg.customer_ref,
+            event="offer_feedback",
+            ledger=runtime.rewards,
+            clock=runtime.clock,
+            purpose="marketing",
+            product=msg.product_id,
+            events=runtime.events,
+            consent=runtime.adapters.consent.get(msg.customer_ref, purpose="marketing"),
+        )
         return {"status": "not_now"}
 
     if request.action == "stop_offers":

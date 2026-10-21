@@ -16,6 +16,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from matchpoint.models import Consent
+from matchpoint.rewards.earn import earn
 from matchpoint.wiring import get_runtime
 
 log = logging.getLogger("matchpoint.consent")
@@ -63,6 +64,15 @@ def put_consent(ref: str, request: ConsentRequest):
         log.info(
             "consent_granted event for %s: personalised_offers first granted",
             ref,
+        )
+        earn(
+            customer_ref=ref,
+            event="consent_granted",
+            ledger=runtime.rewards,
+            clock=runtime.clock,
+            purpose="personalised_offers",
+            events=runtime.events,
+            consent=new_consent,
         )
 
     return {

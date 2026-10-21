@@ -28,7 +28,7 @@ def _parse_as_of(value: str | None):
 @router.get("/customers/{ref}/rewards")
 def get_rewards(ref: str):
     runtime = get_runtime()
-    return account(ref, runtime.rewards.ledger)
+    return account(ref, runtime.rewards)
 
 
 @router.post("/customers/{ref}/rewards/redeem")
@@ -42,7 +42,7 @@ def post_redeem(
         customer_ref=ref,
         reward_id=reward_id,
         idempotency_key=idempotency_key,
-        ledger=runtime.rewards.ledger,
+        ledger=runtime.rewards,
         clock=runtime.clock,
         fulfilment=runtime.adapters.rewards,
         events=runtime.events,
@@ -82,7 +82,7 @@ def post_rewards_event(
     result = earn(
         customer_ref=customer_ref,
         event=event,
-        ledger=runtime.rewards.ledger,
+        ledger=runtime.rewards,
         clock=runtime.clock,
         purpose=purpose,
         product=product,
