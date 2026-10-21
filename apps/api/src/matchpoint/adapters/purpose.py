@@ -45,7 +45,15 @@ _TXN_MARKETING = frozenset(
     {"id", "customer_ref", "at", "direction", "kind", "amount_band", "currency", "simulated"}
 )
 _PROFILE_MARKETING = frozenset(
-    {"customer_ref", "age_band", "segment", "holdings", "complaint_open", "simulated"}
+    {
+        "customer_ref",
+        "age_band",
+        "segment",
+        "holdings",
+        "complaint_open",
+        "dnd_registered",
+        "simulated",
+    }
 )
 
 # model -> purpose -> fields returned. A model missing here cannot be returned at all.

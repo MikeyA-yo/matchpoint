@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from matchpoint.models import Product
+from matchpoint.models import GainSpec, Product
 
 PRODUCTS: tuple[Product, ...] = (
     Product(
@@ -13,12 +13,15 @@ PRODUCTS: tuple[Product, ...] = (
         features=["Set a goal", "Automatic monthly transfer"],
         eligibility={"all": [
             {"fact": "age", "op": ">=", "value": 18},
-            {"fact": "holds", "op": "not_contains", "value": "prd_target_savings"},
+            {"fact": "holds", "op": "not_contains", "value": "savings_account"},
         ]},
         version=3,
         key_facts=["No monthly fee", "Goal reminders", "Interest on balance"],
         gain_model="salary_regular + fee_season",
         compare_group="salaried-no-savings-goal",
+        holding_id="savings_account",
+        fit={"salary_regular": 3, "fee_season": 2},
+        gain=GainSpec(kind="interest", example_rate=0.10, months=12),
     ),
     Product(
         id="prd_business_collections",
@@ -27,13 +30,16 @@ PRODUCTS: tuple[Product, ...] = (
         is_credit=False,
         features=["POS-ready", "Settlement in 24h", "USSD-friendly"],
         eligibility={"all": [
-            {"fact": "segment", "op": "in", "value": ["trader", "sme"]},
-            {"fact": "holds", "op": "not_contains", "value": "prd_business_collections"},
+            {"fact": "segment", "op": "in", "value": ["sme"]},
+            {"fact": "holds", "op": "not_contains", "value": "business_collections"},
         ]},
         version=2,
         key_facts=["Faster settlement", "POS without upfront cost", "USSD check"],
         gain_model="pos_inflow_growth",
         compare_group="sme-growing-inflows",
+        holding_id="business_collections",
+        fit={"business_inflows": 3},
+        gain=GainSpec(kind="fee_saving", example_rate=0.01, months=12),
     ),
     Product(
         id="prd_savings_round_up",
@@ -43,11 +49,15 @@ PRODUCTS: tuple[Product, ...] = (
         features=["Rounds spare change", "Visible balance", "Withdraw any time"],
         eligibility={"all": [
             {"fact": "age", "op": ">=", "value": 18},
+            {"fact": "holds", "op": "not_contains", "value": "round_up_savings"},
         ]},
         version=1,
         key_facts=["No monthly fee", "No lock-in"],
         gain_model="small_frequent_spend",
         compare_group="salaried-active-pos",
+        holding_id="round_up_savings",
+        fit={"small_frequent_spend": 2},
+        gain=GainSpec(kind="interest", example_rate=0.08, months=12),
     ),
     Product(
         id="prd_personal_loan",
@@ -64,6 +74,28 @@ PRODUCTS: tuple[Product, ...] = (
         key_facts=["Fixed APR", "No early-repayment penalty"],
         gain_model="salary_regular + no_existing_loan",
         compare_group="salaried-no-active-loan",
+        holding_id="personal_loan",
+        fit={"salary_regular": 2},
+        gain=GainSpec(kind="cost", example_rate=0.24, months=24),
+    ),
+    Product(
+        id="prd_salary_advance",
+        name="Salary advance",
+        category="credit",
+        is_credit=True,
+        features=["Advance up to half your salary", "Repay on payday"],
+        eligibility={"all": [
+            {"fact": "age", "op": ">=", "value": 21},
+            {"fact": "segment", "op": "in", "value": ["salaried"]},
+            {"fact": "holds", "op": "not_contains", "value": "salary_advance"},
+        ]},
+        version=1,
+        key_facts=["No paperwork", "Repaid from the next salary"],
+        gain_model="salary_regular",
+        compare_group="salaried-mid-month-gap",
+        holding_id="salary_advance",
+        fit={"salary_regular": 3},
+        gain=GainSpec(kind="cost", example_rate=0.05, months=1),
     ),
     Product(
         id="prd_fx_card",
@@ -74,11 +106,15 @@ PRODUCTS: tuple[Product, ...] = (
         eligibility={"all": [
             {"fact": "age", "op": ">=", "value": 18},
             {"fact": "segment", "op": "in", "value": ["salaried", "sme"]},
+            {"fact": "holds", "op": "not_contains", "value": "fx_card"},
         ]},
         version=1,
         key_facts=["$10/year", "Instant freeze in app"],
         gain_model="international_spend",
         compare_group="salaried-abroad",
+        holding_id="fx_card",
+        fit={},
+        gain=GainSpec(kind="cost", example_rate=0.01, months=12),
     ),
     Product(
         id="prd_bills_autopay",
@@ -88,11 +124,15 @@ PRODUCTS: tuple[Product, ...] = (
         features=["Schedule DSTV, power and water", "Pause any time"],
         eligibility={"all": [
             {"fact": "age", "op": ">=", "value": 18},
+            {"fact": "holds", "op": "not_contains", "value": "bills_autopay"},
         ]},
         version=1,
         key_facts=["No service charge", "Reminders before each run"],
         gain_model="recurring_bill_pattern",
         compare_group="salaried-active-bills",
+        holding_id="bills_autopay",
+        fit={"recurring_bill_pattern": 1},
+        gain=GainSpec(kind="fee_saving", example_rate=0.02, months=12),
     ),
 )
 

@@ -67,6 +67,8 @@ class Profile(BaseModel):
     holdings: list[str] = []
     # An open complaint pauses marketing even when consent is on.
     complaint_open: bool = False
+    # NCC Do Not Disturb: promotional SMS must not be sent to a registered number.
+    dnd_registered: bool = False
     simulated: bool = False
 
 
