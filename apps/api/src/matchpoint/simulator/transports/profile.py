@@ -14,6 +14,7 @@ class SimProfileTransport:
                 segment=c.segment,
                 state=c.state,
                 holdings=list(c.holdings),
+                complaint_open=c.blocks_marketing,
                 simulated=True,
             )
 

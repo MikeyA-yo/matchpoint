@@ -15,7 +15,7 @@ import logging
 from collections import deque
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Any, Literal, TypeVar, cast, get_args
+from typing import Any, Literal, cast, get_args
 
 from pydantic import BaseModel
 
@@ -28,6 +28,7 @@ from matchpoint.models import (
     FulfilmentReceipt,
     Product,
     Profile,
+    RefExists,
     Txn,
 )
 from matchpoint.trace import current_trace_id
@@ -43,7 +44,9 @@ def _all(model: type[BaseModel]) -> frozenset[str]:
 _TXN_MARKETING = frozenset(
     {"id", "customer_ref", "at", "direction", "kind", "amount_band", "currency", "simulated"}
 )
-_PROFILE_MARKETING = frozenset({"customer_ref", "age_band", "segment", "holdings", "simulated"})
+_PROFILE_MARKETING = frozenset(
+    {"customer_ref", "age_band", "segment", "holdings", "complaint_open", "simulated"}
+)
 
 # model -> purpose -> fields returned. A model missing here cannot be returned at all.
 FIELD_POLICY: dict[type[BaseModel], dict[Purpose, frozenset[str]]] = {
@@ -61,6 +64,7 @@ FIELD_POLICY: dict[type[BaseModel], dict[Purpose, frozenset[str]]] = {
     },
     # The consent gate runs first for every purpose, so consent is always readable.
     Consent: {p: _all(Consent) for p in PURPOSES},
+    RefExists: {p: _all(RefExists) for p in PURPOSES},
     Product: {p: _all(Product) for p in PURPOSES},
     DeliveryReceipt: {p: _all(DeliveryReceipt) for p in PURPOSES},
     FulfilmentReceipt: {p: _all(FulfilmentReceipt) for p in PURPOSES},
@@ -150,9 +154,6 @@ class AccessLog:
         self._recent.clear()
 
 
-T = TypeVar("T")
-
-
 class PurposeFiltered:
     def __init__(self, inner: object, connector: str, log: AccessLog, clock: Clock):
         self._inner = inner
@@ -205,7 +206,7 @@ class PurposeFiltered:
         )
 
 
-def purpose_filtered(inner: T, connector: str, log: AccessLog, clock: Clock) -> T:
+def purpose_filtered[T](inner: T, connector: str, log: AccessLog, clock: Clock) -> T:
     """Wrap `inner` and keep its static type, so wiring code stays typed."""
     return cast(T, PurposeFiltered(inner, connector, log, clock))
 

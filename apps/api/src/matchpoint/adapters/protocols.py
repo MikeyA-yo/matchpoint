@@ -20,6 +20,7 @@ from matchpoint.models import (
     Product,
     Profile,
     Redemption,
+    RefExists,
     Txn,
 )
 
@@ -35,7 +36,10 @@ class ProductCatalogue(Protocol):
 
 
 class CustomerProfile(Protocol):
-    def get(self, customer_ref: str, *, purpose: Purpose) -> Profile: ...  # age band, segment, products held
+    # age band, segment, products held
+    def get(self, customer_ref: str, *, purpose: Purpose) -> Profile: ...
+    # Existence only, so an unknown ref can 404 without reading a profile.
+    def exists(self, customer_ref: str, *, purpose: Purpose) -> RefExists: ...
 
 
 class ConsentStore(Protocol):
@@ -48,4 +52,7 @@ class ChannelGateway(Protocol):
 
 
 class RewardsFulfilment(Protocol):
-    def fulfil(self, redemption: Redemption, *, purpose: Purpose) -> FulfilmentReceipt: ...  # airtime, voucher, fee waiver
+    # airtime, voucher, fee waiver
+    def fulfil(
+        self, redemption: Redemption, *, purpose: Purpose
+    ) -> FulfilmentReceipt: ...

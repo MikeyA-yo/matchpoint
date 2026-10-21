@@ -54,6 +54,7 @@ def generate_rows(
     while cursor < end:
         _month_events(customer, cursor, rng, events)
         cursor = _next_month(cursor)
+    _append_charges(customer, events, rng)
 
     events.sort(key=lambda t: t.at)
     rows: list[FlexcubeTxnRow] = []
@@ -134,10 +135,7 @@ def _month_events(c: DemoCustomer, in_month: date, rng: Random, out: list[_Txn])
         amount = 450_000_00 if m == 1 else 480_000_00
         out.append(_Txn(at, "debit", "nip_out", amount, SCHOOL_FEE_NARRATIONS[0]))
 
-    # Charge lines that follow transfers out: NIP fee + stamp duty.
-    _append_charges(c, out, rng)
-
-    # Monthly SMS alert bundle, as a token charge, until it is abolished.
+    # Monthly SMS alert bundle, as a token charge.
     at = _at(y, m, _month_days(y, m), 20, 0)
     out.append(_Txn(at, "debit", "charge", 400_00, "SMS ALERT CHARGES"))
 

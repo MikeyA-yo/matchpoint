@@ -5,6 +5,7 @@ A pilot swaps the transports for ZiVA (WhatsApp), the SMS aggregator, the USSD
 gateway and the in-app push service.
 """
 
+from datetime import datetime
 from typing import Protocol
 
 from matchpoint.adapters.errors import DeliveryFailed
@@ -14,7 +15,7 @@ from matchpoint.models import Channel, DeliveryReceipt, OutboundMessage
 
 
 class ChannelTransport(Protocol):
-    def send(self, msg: OutboundMessage, at) -> DeliveryReceipt: ...  # type: ignore[valid-type]
+    def send(self, msg: OutboundMessage, at: datetime) -> DeliveryReceipt: ...
 
 
 class ChannelGatewayImpl:

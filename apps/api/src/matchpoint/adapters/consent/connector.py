@@ -6,7 +6,6 @@ normalised in the model).
 """
 
 import logging
-from datetime import datetime
 from typing import Protocol
 
 from matchpoint.adapters.errors import ConnectorError

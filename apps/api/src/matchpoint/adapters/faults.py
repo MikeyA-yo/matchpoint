@@ -1,10 +1,10 @@
-# FAULT_EXPECTATIONS (hackathon demo):
-#   - ConsentStore error → get() returns no consent, evaluate returns silent.
-#     Nothing else is read. This is the one fault the demo shows.
-# Other faults (duplicate, out-of-order, delay) are modelled by the FaultInjector
-# below. Nothing in the demo wires it in yet.
-
 """Seeded fault injection for any connector or transport.
+
+FAULT_EXPECTATIONS (hackathon demo):
+  - ConsentStore error → get() returns no consent, evaluate returns silent.
+    Nothing else is read. This is the one fault the demo shows.
+Other faults (duplicate, out-of-order, delay) are modelled by the FaultInjector
+below. Nothing in the demo wires it in yet.
 
 Wrap a connector to test how services handle faults. Wrap a transport (which returns raw
 vendor dicts) to test how translation handles them, including a missing required field.
@@ -30,7 +30,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel
 
@@ -83,9 +83,6 @@ class _State:
 
 def _no_sleep(_: timedelta) -> None:
     return None
-
-
-T = TypeVar("T")
 
 
 class FaultInjector:
@@ -182,7 +179,7 @@ class FaultInjector:
         return record.model_copy(update={name: None})
 
 
-def with_faults(
+def with_faults[T](
     inner: T,
     plan: FaultPlan,
     connector: str,

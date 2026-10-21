@@ -8,7 +8,7 @@ from typing import Protocol
 
 from matchpoint.adapters.errors import CustomerNotFound
 from matchpoint.adapters.purpose import Purpose
-from matchpoint.models import Profile
+from matchpoint.models import Profile, RefExists
 
 
 class ProfileTransport(Protocol):
@@ -24,3 +24,10 @@ class CustomerProfileImpl:
         if found is None:
             raise CustomerNotFound("CustomerProfile", f"unknown {customer_ref}")
         return found
+
+    def exists(self, customer_ref: str, *, purpose: Purpose) -> RefExists:
+        try:
+            found = self._transport.read(customer_ref)
+        except CustomerNotFound:
+            found = None
+        return RefExists(customer_ref=customer_ref, exists=found is not None)

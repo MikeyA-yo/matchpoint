@@ -65,7 +65,16 @@ class Profile(BaseModel):
     segment: str | None = None
     state: str | None = None
     holdings: list[str] = []
+    # An open complaint pauses marketing even when consent is on.
+    complaint_open: bool = False
     simulated: bool = False
+
+
+class RefExists(BaseModel):
+    """Answer to "does this customer exist?" without returning any profile data."""
+
+    customer_ref: str
+    exists: bool
 
 
 class Consent(BaseModel):
@@ -82,6 +91,14 @@ class Consent(BaseModel):
         return {c: bool(v.get(c, False)) for c in CHANNELS}
 
 
+class GainSpec(BaseModel):
+    """How the demo works out a naira gain. Rates are examples, never promises."""
+
+    kind: Literal["interest", "fee_saving", "cost"]
+    example_rate: float | None = None
+    months: int = 12
+
+
 class Product(BaseModel):
     id: str
     name: str
@@ -94,6 +111,11 @@ class Product(BaseModel):
     key_facts: list[str] = []
     gain_model: str | None = None
     compare_group: str | None = None
+    # The holding a customer already has that makes this product redundant ("savings_account").
+    holding_id: str | None = None
+    # How suitable the product is for each detected signal. Empty means "no fit, don't offer".
+    fit: dict[str, int] = {}
+    gain: GainSpec | None = None
 
 
 MessagePurpose = Literal["marketing", "service"]

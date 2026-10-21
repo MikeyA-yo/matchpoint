@@ -14,7 +14,7 @@ class FlexcubeTxnRow(TypedDict, total=False):
     TRN_DT: str          # ISO transaction date - UNVERIFIED
     VALUE_DT: str        # ISO value date       - UNVERIFIED
     DRCR_IND: str        # "D" or "C"           - UNVERIFIED
-    LCY_AMOUNT: int      # kobo                 - UNVERIFIED (real FLEXCUBE uses naira with decimals)
+    LCY_AMOUNT: int      # kobo                 - UNVERIFIED (FLEXCUBE normally uses naira)
     TRN_CODE: str        # SAL, NIP, POS, ATM, CHG, STDUTY, REV, ... - UNVERIFIED
     NARRATION: str       # free text            - UNVERIFIED
     RELATED_REF: str     # for reversals        - UNVERIFIED

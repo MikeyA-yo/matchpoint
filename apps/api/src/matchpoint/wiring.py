@@ -5,6 +5,8 @@ transports go here; they are not stubbed in the hackathon build.
 """
 
 from dataclasses import dataclass
+from datetime import datetime
+from functools import lru_cache
 
 from matchpoint.adapters.channels.gateway import ChannelGatewayImpl
 from matchpoint.adapters.consent.connector import ConsentStoreImpl
@@ -14,9 +16,13 @@ from matchpoint.adapters.purpose import AccessLog, purpose_filtered
 from matchpoint.adapters.refs import RefHasher
 from matchpoint.adapters.rewards.connector import SimRewardsFulfilment
 from matchpoint.adapters.transactions.connector import FlexcubeTransactionFeed
-from matchpoint.clock import Clock
-from matchpoint.config import Settings
+from matchpoint.clock import WAT, Clock
+from matchpoint.config import Settings, get_settings
+from matchpoint.ledger.decision_log import DecisionLog
 from matchpoint.models import Channel
+from matchpoint.pipeline.policy import DEFAULT_POLICY, Policy
+from matchpoint.simulator.clock import SimClock
+from matchpoint.simulator.population import DEMO_CUSTOMERS
 from matchpoint.simulator.transports.catalogue import SimCatalogueTransport
 from matchpoint.simulator.transports.channels import (
     SimAppTransport,
@@ -81,5 +87,44 @@ def build_adapters(settings: Settings, seed: int, clock: Clock) -> Adapters:
         hasher=hasher,
         access_log=access,
     )
+
+
+# The simulator's fixed start, from docs/api_design.md section 2.
+DEFAULT_SEED = 42
+DEFAULT_AS_OF = datetime(2026, 12, 3, 9, 0, tzinfo=WAT)
+
+
+@dataclass(frozen=True)
+class Runtime:
+    """What a request needs: connectors, the injected clock, the policy and the log."""
+
+    clock: Clock
+    adapters: Adapters
+    policy: Policy
+    log: DecisionLog
+
+
+def build_runtime(
+    settings: Settings, seed: int = DEFAULT_SEED, as_of: datetime = DEFAULT_AS_OF
+) -> Runtime:
+    clock = SimClock(as_of)
+    return Runtime(
+        clock=clock,
+        adapters=build_adapters(settings, seed, clock),
+        policy=DEFAULT_POLICY,
+        log=DecisionLog(),
+    )
+
+
+@lru_cache
+def get_runtime() -> Runtime:
+    """One runtime per process, so consent changes and the decision log persist."""
+    return build_runtime(get_settings())
+
+
+def demo_customer_refs(settings: Settings | None = None) -> dict[str, str]:
+    """key -> customer_ref for the seven demo customers. Refs are stable HMACs."""
+    hasher = RefHasher((settings or get_settings()).ref_hmac_key.encode(), namespace="customer")
+    return {c.key: hasher.ref(c.source_id) for c in DEMO_CUSTOMERS}
 
 

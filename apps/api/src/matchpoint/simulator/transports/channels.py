@@ -57,8 +57,8 @@ class SimSmsTransport:
                     message_id=msg.id, channel="sms", accepted=False, at=at,
                     status="rejected", reason="DND",
                 )
-            local = at.timetz()
-            if not (SMS_PROMOTIONAL_START <= local.replace(tzinfo=None) < SMS_PROMOTIONAL_END):
+            local = at.time()
+            if not (SMS_PROMOTIONAL_START <= local < SMS_PROMOTIONAL_END):
                 return DeliveryReceipt(
                     message_id=msg.id, channel="sms", accepted=False, at=at,
                     status="rejected", reason="OUTSIDE_WINDOW",
