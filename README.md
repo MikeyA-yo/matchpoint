@@ -36,6 +36,19 @@ pnpm test       # pytest + web typecheck
 pnpm lint       # ruff
 ```
 
+## Frontend
+
+| Route | What it is |
+|---|---|
+| `/` | Landing page |
+| `/signin`, `/signup` | Demo accounts (`POST /auth/*`). Sign-in page has one-click demo customers |
+| `/app` | Customer page: phone view (inbox, Why, Not now, Stop offers, privacy settings) plus a demo panel to run decisions, inject patterns and watch events for that customer |
+| `/console/*` | Bank console: metrics, silence feed, review queue, run/batch, policies, products, campaign requests, experiments, model, simulator, live events, audit. Role switcher sends `X-Role` |
+
+Each card shows the endpoint(s) it calls. The contract lives in [apps/web/src/lib/types.ts](apps/web/src/lib/types.ts) and [section 5.5 of the design doc](docs/api_design.md).
+
+**Mock vs live data.** Until the API endpoints exist, the web app runs an in-browser mock backend ([apps/web/src/lib/mock.ts](apps/web/src/lib/mock.ts)) that follows the same contract and a simplified pipeline. The "Mock data / Live API" pill in the header switches per browser; `VITE_API_MOCK=false` changes the default. Mock state is shared across tabs, so open the phone and the console side by side. `POST /sim/reset` in the console clears it.
+
 ## Deploying
 
 Both apps deploy to [Render](https://render.com) from this repo using [render.yaml](render.yaml):
