@@ -4,7 +4,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 
 from matchpoint.config import get_settings
 from matchpoint.errors import install_error_handlers
-from matchpoint.routers import health
+from matchpoint.routers import decisions, health
 from matchpoint.trace import current_trace_id, reset_trace_id, set_trace_id
 
 TRACE_HEADER = "X-Trace-Id"
@@ -38,6 +38,7 @@ def create_app() -> FastAPI:
     install_error_handlers(app)
 
     app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(decisions.router, prefix=API_PREFIX)
     return app
 
 
