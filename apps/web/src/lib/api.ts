@@ -126,6 +126,15 @@ export function onServedChange(listener: () => void): () => void {
   return () => servedListeners.delete(listener);
 }
 
+/** Records which request failed and who answered, for the Developer view error note. */
+function tagged(e: unknown, method: string, path: string, by: Served): unknown {
+  if (e instanceof ApiError && !e.endpoint) {
+    e.endpoint = `${method} ${path}`;
+    e.servedBy = by;
+  }
+  return e;
+}
+
 /** The API answered "no such route" (not a domain 404 like CUSTOMER_NOT_FOUND). */
 const isMissingRoute = (e: ApiError) => (e.status === 404 && e.code === "NOT_FOUND") || e.status === 405;
 
@@ -208,9 +217,13 @@ const API_CUSTOMERS = new Set(DEMO_CUSTOMERS.map((c) => c.ref));
 async function liveWhereReady<T>(path: string, options: RequestOptions): Promise<T> {
   const method = options.method ?? "GET";
   const ref = customerRefOf(path, options.body);
+  const fromMock = () =>
+    mockRequest<T>(path, options).catch((e) => {
+      throw tagged(e, method, path, "mock");
+    });
   if (ref !== undefined && !API_CUSTOMERS.has(ref) && mockKnowsCustomer(ref)) {
     markServed(method, path, "mock");
-    return mockRequest<T>(path, options);
+    return fromMock();
   }
   try {
     const result = adapt(path, await liveRequest<T>(path, options)) as T;
@@ -221,15 +234,18 @@ async function liveWhereReady<T>(path: string, options: RequestOptions): Promise
     if (!(e instanceof ApiError)) throw e;
     if (!isMissingRoute(e)) {
       markServed(method, path, "live");
-      throw e;
+      throw tagged(e, method, path, "live");
     }
     markServed(method, path, "mock");
-    return mockRequest<T>(path, options);
+    return fromMock();
   }
 }
 
 export function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  return getMode() === "mock" ? mockRequest<T>(path, options) : liveWhereReady<T>(path, options);
+  if (getMode() === "live") return liveWhereReady<T>(path, options);
+  return mockRequest<T>(path, options).catch((e) => {
+    throw tagged(e, options.method ?? "GET", path, "mock");
+  });
 }
 
 /** Subscribes to GET /stream (SSE). Returns an unsubscribe function. */

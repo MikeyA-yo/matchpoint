@@ -181,6 +181,13 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 .alert-error { background: var(--red-soft); color: #ffd6cf; border: 1px solid rgba(255, 138, 122, 0.3); }
 .alert-info { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); }
 .alert code { color: inherit; opacity: 0.8; }
+/* Developer view: status, code, request and trace, with a copy button */
+.error-dev code { font-size: 12px; opacity: 1; }
+.error-status { padding: 1px 6px; border-radius: 4px; background: rgba(255, 138, 122, 0.18); }
+.error-by { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid rgba(255, 138, 122, 0.35); }
+.error-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; opacity: 0.8; word-break: break-all; }
+.error-copy { flex: none; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid rgba(255, 138, 122, 0.35); background: transparent; color: inherit; font: 600 11.5px var(--font); cursor: pointer; }
+.error-copy:hover { background: rgba(255, 138, 122, 0.12); }
 
 .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
 .empty strong { display: block; color: var(--text); margin-bottom: 4px; }

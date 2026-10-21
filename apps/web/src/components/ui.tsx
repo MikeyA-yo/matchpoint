@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import type { ApiError } from "../lib/api";
 import { useTechnical } from "../lib/context";
 import { OUTCOME_LABEL, REASON_LABEL, REASONS, type Outcome, type ReasonCode } from "../lib/types";
@@ -106,12 +106,50 @@ export function Simulated() {
 
 export function ErrorNote({ error }: { error?: ApiError }) {
   const { technical } = useTechnical();
+  const [copied, setCopied] = useState(false);
   if (!error) return null;
+  if (!technical)
+    return (
+      <div className="alert alert-error" role="alert">
+        <div>{error.message}</div>
+      </div>
+    );
+
+  // Same shape as the API's error envelope, plus where the request went
+  const report = {
+    status: error.status,
+    code: error.code,
+    message: error.message,
+    trace_id: error.traceId ?? null,
+    request: error.endpoint ?? null,
+    served_by: error.servedBy ?? null,
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked; the details are on screen
+    }
+  };
   return (
-    <div className="alert alert-error" role="alert">
-      <div>
-        {technical && <strong>{error.code}</strong>} {error.message}
-        {technical && error.traceId && <div className="small"><code>{error.traceId}</code></div>}
+    <div className="alert alert-error error-dev" role="alert">
+      <div className="stack-sm" style={{ gap: 4, minWidth: 0, flex: 1 }}>
+        <div className="row" style={{ gap: 8 }}>
+          <code className="error-status">{error.status || "—"}</code>
+          <code><strong>{error.code}</strong></code>
+          {error.servedBy && <span className="error-by">{error.servedBy === "live" ? "Live API" : "Mock"}</span>}
+          <span className="spacer" />
+          <button type="button" className="error-copy" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+        </div>
+        <div>{error.message}</div>
+        {(error.endpoint || error.traceId) && (
+          <div className="small error-meta">
+            {error.endpoint && <code>{error.endpoint}</code>}
+            {error.traceId && <code>trace {error.traceId}</code>}
+          </div>
+        )}
       </div>
     </div>
   );
