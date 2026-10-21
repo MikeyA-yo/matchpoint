@@ -54,7 +54,7 @@ class Adapters:
 
 
 def build_adapters(
-    settings: Settings, seed: int, clock: Clock
+    settings: Settings, seed: int, clock: SimClock
 ) -> tuple[Adapters, control.SimWorld]:
     if settings.adapter_mode != "sim":
         raise NotImplementedError("pilot mode is a hackathon TODO")
@@ -96,7 +96,7 @@ def build_adapters(
             hasher=hasher,
             access_log=access,
         ),
-        control.SimWorld(clock, flexcube),  # type: ignore[arg-type]
+        control.SimWorld(clock, flexcube),
     )
 
 
