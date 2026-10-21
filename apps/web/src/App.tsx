@@ -1,40 +1,41 @@
-import { useEffect, useState } from "react";
-import { NavLink, Route, Routes } from "react-router";
-import { api } from "./api";
-
-function ApiStatus() {
-  const [status, setStatus] = useState("checking…");
-  useEffect(() => {
-    api<{ status: string; env: string }>("/health")
-      .then((h) => setStatus(`${h.status} (${h.env})`))
-      .catch(() => setStatus("unreachable"));
-  }, []);
-  return <small>API: {status}</small>;
-}
-
-// Customer surface: inbox, Why link, Not now, Stop offers (api_design.md 5.2)
-function PhoneView() {
-  return <h2>Phone view</h2>;
-}
-
-// Zenith console: silence feed, metrics, policies, experiments (api_design.md 5.3, 5.4)
-function Console() {
-  return <h2>Console</h2>;
-}
+import { Navigate, Route, Routes } from "react-router";
+import { Layout } from "./components/Layout";
+import { Campaigns, Products } from "./pages/console/Catalogue";
+import { ConsolePage } from "./pages/console/ConsolePage";
+import { ReviewQueue, RunDecisions, SilenceFeed } from "./pages/console/Decisions";
+import { Audit, Events, Simulator } from "./pages/console/DemoControl";
+import { Experiments, Model } from "./pages/console/Evidence";
+import { Overview } from "./pages/console/Overview";
+import { Policies } from "./pages/console/Policies";
+import { CustomerPage } from "./pages/customer/CustomerPage";
+import { Home } from "./pages/Home";
+import { SignIn } from "./pages/SignIn";
+import { SignUp } from "./pages/SignUp";
 
 export default function App() {
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", padding: 16 }}>
-      <header style={{ display: "flex", gap: 16, alignItems: "baseline" }}>
-        <strong>MATCHPOINT</strong>
-        <NavLink to="/">Phone</NavLink>
-        <NavLink to="/console">Console</NavLink>
-        <ApiStatus />
-      </header>
-      <Routes>
-        <Route path="/" element={<PhoneView />} />
-        <Route path="/console" element={<Console />} />
-      </Routes>
-    </div>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<Home />} />
+        <Route path="signin" element={<SignIn />} />
+        <Route path="signup" element={<SignUp />} />
+        <Route path="app" element={<CustomerPage />} />
+        <Route path="console" element={<ConsolePage />}>
+          <Route index element={<Overview />} />
+          <Route path="decisions" element={<SilenceFeed />} />
+          <Route path="review" element={<ReviewQueue />} />
+          <Route path="run" element={<RunDecisions />} />
+          <Route path="policies" element={<Policies />} />
+          <Route path="products" element={<Products />} />
+          <Route path="campaigns" element={<Campaigns />} />
+          <Route path="experiments" element={<Experiments />} />
+          <Route path="model" element={<Model />} />
+          <Route path="simulator" element={<Simulator />} />
+          <Route path="events" element={<Events />} />
+          <Route path="audit" element={<Audit />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   );
 }

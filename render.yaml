@@ -37,3 +37,6 @@ services:
       # Set to the API URL, e.g. https://matchpoint-api.onrender.com (baked in at build time)
       - key: VITE_API_URL
         sync: false
+      # In-browser mock backend until the API endpoints exist; set to "false" then
+      - key: VITE_API_MOCK
+        value: "true"

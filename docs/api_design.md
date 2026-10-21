@@ -382,6 +382,48 @@ Events:
 | `outcome_recorded` | A response or use check is recorded |
 | `consent_changed` | Consent is updated |
 | `policy_changed` | A policy is saved or approved |
+
+Each event's `data` is JSON and carries `customer_ref` when it concerns one customer, so the phone view can filter.
+
+### 5.5 Customer accounts and shapes the web app relies on (added for the frontend)
+
+Demo accounts only. There is still no real authentication; the token is opaque and the API may ignore it.
+
+#### `POST /auth/signup` (M)
+
+```json
+{ "name": "Amaka Obi", "phone": "08010000001", "password": "demo1234", "persona": "salaried_parent",
+  "consent": { "personalised_offers": false, "channels": { "app": true, "whatsapp": false, "sms": false, "email": false } } }
+```
+
+`persona` is `salaried_parent`, `sme_owner` or `young_professional` and decides which patterns the simulator plants. Consent from the form is written to the ledger with `source: "signup"`. Everything defaults to off: silence is not consent.
+
+Response: `{ "customer": Customer, "token": "demo_..." }`. Errors: `409 PHONE_TAKEN`, `422 VALIDATION_ERROR`.
+
+#### `POST /auth/signin` (M)
+
+`{ "phone": "...", "password": "..." }` → same response. Error: `401 INVALID_CREDENTIALS`. Seed the four demo accounts listed in `apps/web/src/lib/personas.ts` (`DEMO_ACCOUNTS`).
+
+#### `GET /customers/{ref}` (M)
+
+`{ "customer_ref", "name", "phone", "persona", "age_band", "segment", "holdings": [] }`
+
+#### Shapes
+
+The full contract is `apps/web/src/lib/types.ts`. Points the sections above leave open:
+
+- Lists (`GET /decisions`, `/customers/{ref}/inbox`, `/products`, `/audit/log`) return `{ "items": [...], "next_cursor": null }`.
+- Inbox message: `{ id, decision_id, customer_ref, product_id, channel, title, body, why, delivered_at, status, simulated }`, `status` one of `delivered`, `scheduled`, `opened`, `accepted`, `not_now`, `cancelled`.
+- `GET /messages/{id}/why`: `{ message_id, why, data_categories: [], consent_url }`.
+- `POST /messages/{id}/respond`: `{ message, consent? }` (consent only for `stop_offers`).
+- `POST /decisions/{id}/reject` body `{ "reason" }` (required); approve takes an optional `{ "note" }`. The decision gains `review: { action, by, at, note }`.
+- `GET /policies`: `{ active_id, items }`. `PUT /policies` and `POST /policies/simulate` take the policy fields without `id`/`status`. Simulate returns `{ counts, by_reason, population, simulated }`.
+- `POST /sim/inject`: `{ pattern, customer_ref? }` → `{ pattern, customer_ref, affected }`.
+- `POST /experiments/run` → `{ id, seed, days, status, results: [{ strategy, messages_per_customer, opt_out_rate, sustained_adoption_60d, fatigue_index, uplift_recovery? }], created_at, simulated }`.
+- `GET /model/info` → `{ version, qini, trained_at, simulated }`.
+- Decisions carry `mode` (`live` or `dry_run`) so the customer's activity view only shows decisions that really reached them.
+- A send in quiet hours keeps `outcome: "send"`, adds `QUIET_HOURS` to `reasons`, and sets `scheduled_for`.
+- Idempotency: the mock also keys decisions on `mode`, and invalidates a customer's cached decisions when consent, holdings or injected patterns change. Otherwise a dry run blocks the live run at the same `as_of`, and Stop offers would not take effect on a re-run.
 | `points_awarded` | An earn event is accepted and written to the ledger |
 | `points_redeemed` | A redemption is fulfilled |
 | `tier_changed` | A customer's tier changes |
