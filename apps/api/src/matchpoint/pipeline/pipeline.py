@@ -40,6 +40,9 @@ STEPS = (
 
 def evaluate(ctx: Context) -> Decision:
     ensure_customer(ctx)
+    existing = ctx.log.find(ctx.customer_ref, ctx.as_of, ctx.mode)
+    if existing is not None:
+        return existing
     result = StepResult(0, "start")
     for step in STEPS:
         result = step(ctx)
@@ -61,7 +64,10 @@ def ensure_customer(ctx: Context) -> None:
 
 
 def _finish(ctx: Context, result: StepResult) -> Decision:
-    outcome = result.outcome or "silent"
+    if result.outcome is not None:
+        outcome = result.outcome
+    else:
+        outcome = "send" if ctx.product is not None and ctx.message is not None else "silent"
     reason = result.reason if result.reason in REASON_CODES else "NO_MATCH"
     reasons = [reason, *(extra for extra in ctx.reasons if extra != reason)]
     product_id = ctx.product.id if ctx.product else None

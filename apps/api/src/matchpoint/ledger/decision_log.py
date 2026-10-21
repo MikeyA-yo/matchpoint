@@ -30,6 +30,15 @@ class DecisionLog:
     def get(self, decision_id: str) -> Decision | None:
         return self._by_id.get(decision_id)
 
+    def find(
+        self, customer_ref: str, as_of: datetime, mode: str
+    ) -> Decision | None:
+        """The decision already made for this customer at this instant."""
+        for decision in self.for_customer(customer_ref):
+            if decision.as_of == as_of and decision.mode == mode:
+                return decision
+        return None
+
     def entries(self) -> list[Decision]:
         """Newest first."""
         return [self._by_id[decision_id] for decision_id in reversed(self._order)]

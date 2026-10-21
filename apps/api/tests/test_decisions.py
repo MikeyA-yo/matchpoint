@@ -10,8 +10,9 @@ from matchpoint.main import app
 from matchpoint.models import Consent, Txn
 from matchpoint.pipeline.channels import choose_channel, next_window_end
 from matchpoint.pipeline.context import Context
+from matchpoint.pipeline.guardrail import run_checks
 from matchpoint.pipeline.policy import DEFAULT_POLICY
-from matchpoint.pipeline.schemas import Decision, Trace
+from matchpoint.pipeline.schemas import Decision, Message, Trace
 from matchpoint.pipeline.steps import detect
 
 client = TestClient(app)
@@ -131,22 +132,34 @@ def test_adaeze_matches_target_savings(runtime):
     assert rows["prd_savings_round_up"]["dropped"] is None
     assert rows["prd_target_savings"]["uplift"] > rows["prd_savings_round_up"]["uplift"]
     assert rows["prd_salary_advance"]["dropped"] == "CREDIT_REVIEW"
-    assert body["trace"]["steps"][-1]["name"] == "pick_one"
-    assert body["trace"]["steps"][-1]["reason"] == "PIPELINE_INCOMPLETE"
+    assert body["outcome"] == "send"
+    assert body["product_id"] == "prd_target_savings"
+    assert body["channel"] == "app"
+    assert body["reasons"] == ["OK"]
+    assert body["message"]["title"]
+    assert "stop offers" in body["message"]["body"].lower()
+    assert "illustrative" in body["message"]["body"].lower()
+    assert body["trace"]["steps"][-1]["name"] == "deliver"
 
 
 def test_musa_matches_round_up_not_business_collections(runtime):
-    rows = candidates(post("musa").json())
+    body = post("musa").json()
+    rows = candidates(body)
 
+    assert body["outcome"] == "send"
+    assert body["product_id"] == "prd_savings_round_up"
     assert rows["prd_savings_round_up"]["dropped"] is None
     assert rows["prd_business_collections"]["dropped"] == "NOT_ELIGIBLE"
     assert rows["prd_salary_advance"]["dropped"] == "NOT_ELIGIBLE"
 
 
 def test_chiamaka_matches_business_collections(runtime):
-    rows = candidates(post("chiamaka").json())
+    body = post("chiamaka").json()
+    rows = candidates(body)
     viable = [row for row in rows.values() if row["eligible"] and row["dropped"] is None]
 
+    assert body["outcome"] == "send"
+    assert body["product_id"] == "prd_business_collections"
     assert max(viable, key=lambda row: row["uplift"])["product_id"] == (
         "prd_business_collections"
     )
@@ -157,12 +170,14 @@ def test_tunde_gets_round_up_with_credit_candidates_in_review(runtime):
     body = post("tunde").json()
     rows = candidates(body)
 
+    assert body["outcome"] == "send"
+    assert body["product_id"] == "prd_savings_round_up"
     assert rows["prd_target_savings"]["dropped"] == "ALREADY_HOLDS"
     assert rows["prd_savings_round_up"]["dropped"] is None
     assert rows["prd_salary_advance"]["dropped"] == "CREDIT_REVIEW"
     assert rows["prd_personal_loan"]["dropped"] == "CREDIT_REVIEW"
-    assert body["trace"]["steps"][-2]["name"] == "apply_rules"
-    assert body["trace"]["steps"][-2]["status"] == "ok"
+    assert body["trace"]["steps"][5]["name"] == "apply_rules"
+    assert body["trace"]["steps"][5]["status"] == "ok"
 
 
 def test_tunde_fee_season_evidence_names_the_months(runtime):
@@ -226,6 +241,50 @@ def test_quiet_hours_reschedule_instead_of_dropping():
 
     assert next_window_end(at, window) == datetime(2026, 12, 4, 8, 0, tzinfo=WAT)
     assert next_window_end(later, window) == datetime(2026, 12, 4, 8, 0, tzinfo=WAT)
+
+
+def test_quiet_hours_end_to_end_sends_with_schedule(runtime):
+    body = post("adaeze", as_of="2026-12-03T23:00:00+01:00").json()
+
+    assert body["outcome"] == "send"
+    assert body["channel"] == "app"
+    assert body["scheduled_for"] == "2026-12-04T07:00:00+01:00"
+    assert body["reasons"] == ["OK", "QUIET_HOURS"]
+    assert body["trace"]["steps"][-1]["name"] == "deliver"
+
+
+def test_live_send_is_recorded_once(runtime):
+    first = post("adaeze").json()
+    second = post("adaeze").json()
+
+    assert first == second
+    assert len(runtime.log.for_customer(first["customer_ref"])) == 1
+
+
+def test_dry_run_send_is_not_a_contact(runtime):
+    body = post("adaeze", mode="dry_run").json()
+    ref = body["customer_ref"]
+    as_of = datetime.fromisoformat(body["as_of"])
+
+    assert body["outcome"] == "send"
+    assert runtime.log.contacts_since(ref, as_of) == 0
+
+
+def test_guardrail_blocks_misleading_copy():
+    good = Message(
+        title="Put your salary to work",
+        body="You can stop offers at any time.",
+        why="Based on your salary. You allowed personalised offers.",
+    )
+    assert all(check.passed for check in run_checks(good, DEFAULT_POLICY))
+
+    bad = Message(
+        title="Guaranteed returns",
+        body="Risk-free money. You can stop offers at any time.",
+        why="",
+    )
+    checks = {check.rule: check.passed for check in run_checks(bad, DEFAULT_POLICY)}
+    assert checks["CBN_NO_MISLEADING_CLAIMS"] is False
 
 
 def test_channel_order_follows_category(runtime):
