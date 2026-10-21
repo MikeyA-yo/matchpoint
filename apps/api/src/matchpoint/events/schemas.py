@@ -16,6 +16,9 @@ StreamEventType = Literal[
     "outcome_recorded",
     "consent_changed",
     "policy_changed",
+    "points_awarded",
+    "points_redeemed",
+    "tier_changed",
 ]
 
 STREAM_EVENT_TYPES: tuple[StreamEventType, ...] = get_args(StreamEventType)
