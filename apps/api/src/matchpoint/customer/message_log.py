@@ -51,6 +51,10 @@ class MessageStore:
         ids = self._by_customer.get(ref, [])
         return [self._by_id[i] for i in reversed(ids)]
 
+    def all(self) -> list[StoredMessage]:
+        """Every stored message, oldest first."""
+        return list(self._by_id.values())
+
     def by_id(self, message_id: str) -> StoredMessage | None:
         return self._by_id.get(message_id)
 

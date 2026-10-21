@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 
 from matchpoint.config import get_settings
+from matchpoint.customer import routes as customer_routes
 from matchpoint.errors import install_error_handlers
-from matchpoint.routers import decisions, health, sim, stream
+from matchpoint.routers import decisions, health, metrics, sim, stream
 from matchpoint.trace import current_trace_id, reset_trace_id, set_trace_id
 
 TRACE_HEADER = "X-Trace-Id"
@@ -39,8 +40,10 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(decisions.router, prefix=API_PREFIX)
+    app.include_router(metrics.router, prefix=API_PREFIX)
     app.include_router(sim.router, prefix=API_PREFIX)
     app.include_router(stream.router, prefix=API_PREFIX)
+    app.include_router(customer_routes.router, prefix=API_PREFIX)
     return app
 
 
