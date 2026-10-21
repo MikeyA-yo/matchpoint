@@ -53,6 +53,8 @@ Rule: services never import a simulator directly. They receive adapters by depen
 Every adapter call states its purpose. A wrapper returns only the fields allowed for that purpose (for example, `marketing` sees a transaction's amount band but not its amount or narration) and logs the purpose, the fields returned and the trace ID. The field policy is in `apps/api/src/matchpoint/adapters/purpose.py`.
 
 Connector faults surface as defined errors in the envelope: `503 UPSTREAM_UNAVAILABLE`, `504 UPSTREAM_TIMEOUT`, `502 UPSTREAM_BAD_DATA`, `502 DELIVERY_FAILED`.
+
+See [docs/connectors/](connectors/) for what each connector does, how a pilot swaps it, and the mentor question list.
  
 ## 2. Conventions
  
@@ -110,7 +112,7 @@ Connector faults surface as defined errors in the envelope: `503 UPSTREAM_UNAVAI
 {
   "customer_ref": "cus_8f3a",
   "personalised_offers": true,
-  "channels": { "app": true, "whatsapp": true, "sms": false, "email": false },
+  "channels": { "app": true, "whatsapp": true, "sms": false, "email": false, "ussd": false },
   "updated_at": "2026-11-20T18:41:00+01:00",
   "source": "app_settings"
 }

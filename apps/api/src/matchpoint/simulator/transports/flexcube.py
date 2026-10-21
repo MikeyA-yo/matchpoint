@@ -1,33 +1,31 @@
 """SimFlexcubeTransport: emits FLEXCUBE rows for the demo customers only.
 
-The transport doesn't know about customer_refs. The connector resolves the
-customer_ref to a source account number through the RefIndex and asks for the
-history by account.
+Resolves customer_ref → account_no via the shared RefHasher, then runs the
+transaction generator.
 """
 
 from datetime import datetime
 
 from matchpoint.adapters.errors import CustomerNotFound
+from matchpoint.adapters.refs import RefHasher
 from matchpoint.adapters.transactions.vendor import FlexcubeTxnRow
 from matchpoint.simulator.population import DEMO_CUSTOMERS, account_numbers
 from matchpoint.simulator.transactions import generate_rows
 
 
 class SimFlexcubeTransport:
-    def __init__(self, seed: int):
+    def __init__(self, seed: int, hasher: RefHasher):
         self._seed = seed
-        self._accounts = account_numbers(seed)
-        self._by_account = {acct: c for c, acct in zip(DEMO_CUSTOMERS,
-                                                       self._accounts.values(), strict=True)}
+        accounts = account_numbers(seed)
+        self._by_ref = {
+            hasher.ref(c.source_id): (c, accounts[c.source_id]) for c in DEMO_CUSTOMERS
+        }
 
-    def account_history(
-        self, account_no: str, start: datetime, end: datetime
+    def history_for(
+        self, customer_ref: str, start: datetime, end: datetime
     ) -> list[FlexcubeTxnRow]:
-        customer = self._by_account.get(account_no)
-        if customer is None:
-            raise CustomerNotFound("SimFlexcubeTransport", f"unknown account {account_no}")
+        pair = self._by_ref.get(customer_ref)
+        if pair is None:
+            raise CustomerNotFound("SimFlexcubeTransport", f"unknown {customer_ref}")
+        customer, account_no = pair
         return generate_rows(customer, account_no, start.date(), end.date(), self._seed)
-
-    def accounts(self) -> dict[str, str]:
-        """source_id → account_no, for wiring."""
-        return dict(self._accounts)
