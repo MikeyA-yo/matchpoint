@@ -47,7 +47,7 @@ class BatchReport:
 def run_batch(
     customer_refs: list[str],
     *,
-    adapters: "Adapters",
+    adapters: Adapters,
     clock: Clock,
     model_version: str = "cohort_v1",
 ) -> BatchReport:
@@ -68,7 +68,7 @@ def run_batch(
 
     labels = _cluster([row[1] for row in rows])
     assignments: list[ClusterAssignment] = []
-    for (ref, _, _), label in zip(rows, labels):
+    for (ref, _, _), label in zip(rows, labels, strict=False):
         assignment = ClusterAssignment(customer_ref=ref, cluster_id=label, assigned_at=as_of)
         assignments.append(assignment)
         try:
@@ -137,7 +137,7 @@ def _build_cluster_map(
     rows: list[tuple[str, list[float], Profile]], labels: list[int]
 ) -> dict[int, str]:
     by_cluster: dict[int, list[Profile]] = {}
-    for (_, _, profile), label in zip(rows, labels):
+    for (_, _, profile), label in zip(rows, labels, strict=False):
         by_cluster.setdefault(label, []).append(profile)
     mapping: dict[int, str] = {}
     for cluster_id, profiles in by_cluster.items():

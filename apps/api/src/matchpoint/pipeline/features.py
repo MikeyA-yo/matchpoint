@@ -130,7 +130,7 @@ def _frequency(rows: list[tuple[Txn, str]]) -> tuple[float, int, float]:
     dates = sorted({r[0].at.date() for r in rows})
     months = {(r[0].at.year, r[0].at.month) for r in rows}
     per_month = len(rows) / max(len(months), 1)
-    gaps = [(b - a).days for a, b in zip(dates, dates[1:])]
+    gaps = [(b - a).days for a, b in zip(dates, dates[1:], strict=False)]
     cadence_std = statistics.pstdev(gaps) if len(gaps) >= 2 else 0.0
     return round(per_month, 2), len(dates), round(cadence_std, 2)
 

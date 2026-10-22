@@ -10,7 +10,7 @@
       "trn_codes": []
     },
     "school_fee": {
-      "phrases": ["school fee", "tuition", "wsc fee", "university fee"],
+      "phrases": ["school fees", "school fee", "tuition", "wsc fee", "university fee", "bursary", "greenspring", "federal govt college"],
       "trn_codes": []
     },
     "utility": {

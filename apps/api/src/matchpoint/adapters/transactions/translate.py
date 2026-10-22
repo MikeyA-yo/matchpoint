@@ -82,29 +82,43 @@ _UNKNOWN = "other"
 def classify_narration(narration: str, trn_code: str | None = None) -> str:
     """Return the best-matching anchor label, or "other" below threshold.
 
-    `trn_code` short-circuits the embedding path when a known FLEXCUBE code
-    deterministically names the label (fast path).
+    Resolution order:
+      1. Narration embedding above threshold, when MiniLM is available.
+      2. Narration + trn_code agree: pick that label.
+      3. Narration word-boundary match on the longest phrase.
+      4. trn_code alone, when the narration says nothing.
     """
-    if not narration:
-        return _UNKNOWN
+    import re
+
     anchors = narration_anchors()
-    if trn_code:
-        label = _label_from_trn_code(anchors, trn_code)
-        if label is not None:
-            return label
+    text = (narration or "").lower()
+    code_label = _label_from_trn_code(anchors, trn_code) if trn_code else None
 
-    text = narration.lower()
-    embedder = _load_embedder()
-    if embedder is not None:
-        label, score = _cosine_label(embedder, text, anchors)
-        if score >= float(anchors.get("threshold", 0.35)):
-            return label
-
-    # Fallback: substring match against each label's anchor phrases.
-    for label, spec in anchors["anchors"].items():
-        for phrase in spec.get("phrases", []):
-            if phrase.lower() in text:
+    if text:
+        embedder = _load_embedder()
+        if embedder is not None:
+            label, score = _cosine_label(embedder, text, anchors)
+            if score >= float(anchors.get("threshold", 0.35)):
                 return label
+
+        matched: list[tuple[str, int]] = []
+        for label, spec in anchors["anchors"].items():
+            for phrase in spec.get("phrases", []):
+                pattern = re.compile(
+                    rf"(?:^|[^a-z0-9]){re.escape(phrase.lower())}(?:$|[^a-z0-9])"
+                )
+                if pattern.search(text):
+                    matched.append((label, len(phrase)))
+                    break
+
+        if matched:
+            if code_label and any(label == code_label for label, _ in matched):
+                return code_label
+            best_label, _ = max(matched, key=lambda item: item[1])
+            return best_label
+
+    if code_label is not None:
+        return code_label
     return _UNKNOWN
 
 
@@ -118,8 +132,13 @@ def _label_from_trn_code(anchors: dict[str, Any], trn_code: str) -> str | None:
 
 @lru_cache(maxsize=1)
 def _load_embedder() -> Any | None:
-    """Load MiniLM once per process. None if sentence-transformers is not
-    available or the model cannot be fetched (keeps the API runnable offline)."""
+    """Load MiniLM once per process. Opt-in via `MATCHPOINT_USE_MINILM=1` so
+    the API never blocks on a model download during ordinary test runs. The
+    classifier falls back to keyword matching when this returns None."""
+    import os
+
+    if os.environ.get("MATCHPOINT_USE_MINILM", "").lower() not in {"1", "true", "yes"}:
+        return None
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
     except ImportError:

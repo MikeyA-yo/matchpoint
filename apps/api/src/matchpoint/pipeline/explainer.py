@@ -111,7 +111,7 @@ def _naira(value: int) -> str:
 
 
 @lru_cache(maxsize=1)
-def _env() -> "Environment":
+def _env() -> Environment:
     from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
     templates_dir = Path(
@@ -129,7 +129,7 @@ def _env() -> "Environment":
     return env
 
 
-def _try_template(env: "Environment", template_id: str) -> "Template | None":
+def _try_template(env: Environment, template_id: str) -> Template | None:
     name = template_id if template_id.endswith(".j2") else f"{template_id}.j2"
     try:
         return env.get_template(name)

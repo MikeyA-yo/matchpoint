@@ -33,7 +33,7 @@ def score_products(features: FeatureVector) -> list[tuple[str, float]]:
 
         probs = booster.predict(np.asarray([features.to_dense()], dtype=float))
         row = probs[0]
-        ranked = sorted(zip(classes, row), key=lambda x: -x[1])
+        ranked = sorted(zip(classes, row, strict=False), key=lambda x: -x[1])
         return [(cls, float(score)) for cls, score in ranked]
     noise = cluster_to_product().get("-1")
     if noise:
