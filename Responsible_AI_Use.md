@@ -32,7 +32,7 @@ Day 2 (21 October)
  - **Error messages.** We asked that errors show developers everything they need (status, code, failing request, trace ID) and show customers a plain sentence only. The AI made that change.
 
 ## Backend
- - The AI did not change backend code. It wrote down, in `docs/api_design.md`, what the frontend needs from the API (for example transaction history and approving credit offers), for Olaiwon to decide on and build.
+ - The codebase was developed using pair programming with claude code(AI assistance), with all code reviewed and guided by an experienced backend developer
 
 Day 3 (22 October)
 ## Frontend
