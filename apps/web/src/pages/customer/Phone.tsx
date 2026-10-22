@@ -30,6 +30,7 @@ const ICONS = {
   gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M5 12v8h14v-8M12 8v12M12 8S10.5 3 8 4.5 9 8 12 8zM12 8s1.5-5 4-3.5S15 8 12 8z" /></>,
   shield: <path d="M12 21s7.5-3.5 7.5-9.5V5.5L12 3 4.5 5.5v6C4.5 17.5 12 21 12 21z" />,
   chevron: <path d="M9 6l6 6-6 6" />,
+  back: <path d="M15 6l-6 6 6 6" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
 } satisfies Record<string, ReactNode>;
 
@@ -134,7 +135,13 @@ export function Phone({ customer }: { customer: Customer }) {
         ) : (
           <>
             <div className="phone-head p-head">
-              <span className="p-avatar" aria-hidden>{initials(customer.name)}</span>
+              {tab === "home" ? (
+                <span className="p-avatar" aria-hidden>{initials(customer.name)}</span>
+              ) : (
+                <button type="button" className="p-back" onClick={() => go("home")} aria-label="Back to Home">
+                  <Icon name="back" />
+                </button>
+              )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="muted small">{tab === "home" ? "Good morning," : TAB_TITLE[tab]}</div>
                 <h2>{tab === "home" ? customer.name.split(" ")[0] : TAB_HEADING[tab]}</h2>
