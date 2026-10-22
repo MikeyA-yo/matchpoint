@@ -207,7 +207,7 @@ def customer_refs_from_adapters(adapters: Any) -> list[str]:
     exposes DEMO_CUSTOMERS indirectly through the profile transport; we read
     that off the adapter's state if present, else return []."""
     profile = adapters.profile
-    inner = getattr(profile, "_target", profile)
+    inner = getattr(profile, "_inner", profile)
     transport = getattr(inner, "_transport", None)
     if transport is None:
         return []
