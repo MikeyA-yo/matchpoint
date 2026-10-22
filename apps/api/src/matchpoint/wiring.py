@@ -159,12 +159,30 @@ def reset_runtime(seed: int = DEFAULT_SEED) -> Runtime:
 
 
 def sim_start(seed: int, n_customers: int, days: int, scenario: str) -> control.SimState:
-    """Begin a run: the seed reseeds the data, so the runtime is rebuilt around it."""
+    """Begin a run: the seed reseeds the data, so the runtime is rebuilt around it.
+    After the sim world is primed, we also kick off the cohort batch so each demo
+    customer gets a fresh cluster_id and the ranker/ map is rebuilt."""
     runtime = reset_runtime(seed)
     config = control.SimConfig(
         seed=seed, n_customers=n_customers, days=days, scenario=scenario
     )
-    return runtime.sim.start(config)
+    state = runtime.sim.start(config)
+    _run_cohort_batch_best_effort(runtime)
+    return state
+
+
+def _run_cohort_batch_best_effort(runtime: "Runtime") -> None:
+    """Fire the daily batch once so sim/start leaves cluster_id written. We
+    swallow failures so a missing optional dep (hdbscan, lightgbm) never
+    breaks sim startup."""
+    try:
+        from matchpoint.pipeline import cohort
+
+        refs = cohort.customer_refs_from_adapters(runtime.adapters)
+        if refs:
+            cohort.run_batch(refs, adapters=runtime.adapters, clock=runtime.clock)
+    except Exception:
+        return
 
 
 def sim_reset() -> control.SimState:

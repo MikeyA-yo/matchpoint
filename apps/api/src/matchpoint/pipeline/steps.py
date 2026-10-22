@@ -2,23 +2,43 @@
 
 Steps 1-3 are the gate: consent, opt-out/complaint, then context. Nothing beyond the
 consent record is read until the customer has said yes to personalised offers, which is
-the point of the demo. Steps 4-6 detect, match and apply hard rules. Steps 7-10 pick one,
-write the message, check it and deliver it.
+the point of the demo. Steps 4-7 are the cohort flow: features, cluster, product pick,
+individual gain. Steps 8-10 render the message, check it and deliver it.
+
+`build_feature_vector` is re-exported from pipeline.features so the pasted spec path
+`pipeline/steps.build_feature_vector` resolves.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from matchpoint.customer.message_log import StoredMessage
 from matchpoint.models import OutboundMessage
 from matchpoint.pipeline import rules
-from matchpoint.pipeline.context import Context, Delivery, ScoredProduct
-from matchpoint.pipeline.detector import detect_signals
+from matchpoint.pipeline.context import Context, Delivery
 from matchpoint.pipeline.explainer import explain
-from matchpoint.pipeline.guardrail import run_checks
+from matchpoint.pipeline.features import balances_from_transactions, build_feature_vector
+from matchpoint.pipeline.guardrail import run_compliance_checks
 from matchpoint.pipeline.ids import decision_id, message_id
-from matchpoint.pipeline.matcher import build_candidates
+from matchpoint.pipeline.policy import filter_eligible
 from matchpoint.pipeline.schemas import Candidate, Trigger
 from matchpoint.pipeline.trace import StepResult
+from matchpoint.ranker import infer as ranker_infer
+
+__all__ = [
+    "build_feature_vector",
+    "consent_gate",
+    "opt_out_and_complaint",
+    "load_context",
+    "build_features",
+    "assign_cluster",
+    "pick_product",
+    "estimate_individual_gain",
+    "build_message",
+    "guardrail",
+    "deliver",
+]
 
 
 def consent_gate(ctx: Context) -> StepResult:
@@ -74,9 +94,9 @@ def opt_out_and_complaint(ctx: Context) -> StepResult:
 
 
 def load_context(ctx: Context) -> StepResult:
-    """Step 3. Profile, holdings, transactions and the catalogue, through the adapters."""
-    if ctx.profile is None:
-        ctx.profile = ctx.adapters.profile.get(ctx.customer_ref, purpose="marketing")
+    """Step 3. Profile (with cluster_id), holdings, transactions and the catalogue."""
+    # Re-read profile under profiling purpose so cluster_id is not withheld.
+    ctx.profile = ctx.adapters.profile.get(ctx.customer_ref, purpose="profiling")
     ctx.transactions = ctx.adapters.transactions.window(
         ctx.customer_ref, ctx.window_start(), ctx.as_of, purpose="profiling"
     )
@@ -85,266 +105,224 @@ def load_context(ctx: Context) -> StepResult:
     return StepResult(3, "load_context", "OK", detail)
 
 
-def detect(ctx: Context) -> StepResult:
-    """Step 4. Turn transactions into signals and screen blocked categories."""
-    signals = detect_signals(
-        ctx.transactions, ctx.as_of, ctx.policy.blocked_trigger_categories
+def build_features(ctx: Context) -> StepResult:
+    """Step 4. Narration-classified counts, frequency, amount, timing, balance stats."""
+    if ctx.profile is None:
+        return StepResult(
+            4, "build_features", "NO_MATCH", "Profile missing.", outcome="silent"
+        )
+    balances = balances_from_transactions(ctx.transactions)
+    features = build_feature_vector(
+        ctx.transactions, balances, list(ctx.profile.holdings), ctx.profile
     )
-    for signal in signals:
+    ctx.features = features
+    for label, count in features.narration_counts.items():
         ctx.trace.triggers.append(
             Trigger(
-                type=signal.type,
-                evidence=signal.evidence,
-                category=signal.category,
-                blocked=signal.blocked,
+                type=f"narration_{label}",
+                evidence=f"{count} {label} rows",
+                category=None,
+                blocked=False,
             )
         )
-    if not signals:
+    if not features.narration_counts:
         return StepResult(
             4,
-            "detect",
+            "build_features",
             "NO_MATCH",
-            "No signals found in the transaction window.",
-            outcome="silent",
-        )
-    usable = [signal for signal in signals if not signal.blocked]
-    blocked = len(signals) - len(usable)
-    if not usable:
-        ctx.trace.check(
-            "SENSITIVE_TRIGGER",
-            False,
-            f"Only blocked-category signals were found ({blocked}).",
-        )
-        return StepResult(
-            4,
-            "detect",
-            "SENSITIVE_TRIGGER",
-            "Only blocked-category triggers were found.",
-            outcome="hold",
-        )
-    if blocked:
-        ctx.trace.check(
-            "SENSITIVE_TRIGGER",
-            True,
-            f"Screened out {blocked} blocked-category trigger(s); "
-            f"{len(usable)} usable remain.",
-        )
-    ctx.signals = usable
-    detail = f"{len(usable)} usable signals"
-    if blocked:
-        detail += f", {blocked} blocked"
-    return StepResult(4, "detect", "OK", detail)
-
-
-def match_products(ctx: Context) -> StepResult:
-    """Step 5. Score eligible, not-held products against the signals."""
-    ctx.candidates = build_candidates(ctx.products, ctx.profile, ctx.signals)
-    ctx.trace.candidates = [_row(candidate) for candidate in ctx.candidates]
-    viable = [
-        candidate for candidate in ctx.candidates if candidate.eligible and candidate.score > 0
-    ]
-    if not viable:
-        return StepResult(
-            5,
-            "match_products",
-            "NO_MATCH",
-            "No eligible product fits the detected signals.",
+            "No usable transactions in the window.",
             outcome="silent",
         )
     return StepResult(
-        5,
-        "match_products",
+        4,
+        "build_features",
         "OK",
-        f"{len(viable)} of {len(ctx.products)} products fit the signals",
+        f"features: {len(features.narration_counts)} narration labels, "
+        f"{features.freq_txns_per_month} txn/mo",
     )
 
 
-def apply_rules(ctx: Context) -> StepResult:
-    """Step 6. Consent, caps, gaps, cooldowns, quiet hours, DND and credit review."""
+def assign_cluster(ctx: Context) -> StepResult:
+    """Step 5. Read the persisted cluster_id, or fall back to ranker.infer."""
+    cluster_id: int | None = ctx.profile.cluster_id if ctx.profile else None
+    source = "persisted"
+    if cluster_id is None and ctx.features is not None:
+        scored = ranker_infer.score_products(ctx.features)
+        if scored:
+            top_product_id = scored[0][0]
+            cluster_id = _cluster_for_product(top_product_id)
+            source = "ranker_fallback"
+    if cluster_id is None:
+        cluster_id = -1
+        source = "noise"
+    ctx.cluster_id = cluster_id
+    ctx.trace.check(
+        "CLUSTER_ASSIGNED",
+        True,
+        f"cluster_id={cluster_id} via {source}",
+    )
+    return StepResult(5, "assign_cluster", "OK", f"cluster_id={cluster_id} ({source})")
+
+
+def pick_product(ctx: Context) -> StepResult:
+    """Step 6. Map cluster -> product, run hard eligibility, caps and cooldowns."""
+    mapping = ranker_infer.cluster_to_product()
+    product_id = mapping.get(str(ctx.cluster_id)) or mapping.get("-1")
+    if product_id is None:
+        return StepResult(
+            6, "pick_product", "NO_MATCH", "Cluster map has no product.", outcome="silent"
+        )
+    product = next((p for p in ctx.products if p.id == product_id), None)
+    if product is None:
+        return StepResult(
+            6,
+            "pick_product",
+            "NO_MATCH",
+            f"Cluster map pointed at unknown product {product_id}.",
+            outcome="silent",
+        )
+
+    # Candidate row for the trace.
+    def _row(dropped: str | None = None) -> Candidate:
+        return Candidate(
+            product_id=product.id,
+            eligible=dropped != "NOT_ELIGIBLE",
+            uplift=1.0,
+            dropped=dropped,
+        )
+
+    if product.holding_id and product.holding_id in (ctx.profile.holdings if ctx.profile else []):
+        ctx.trace.check("ALREADY_HOLDS", False, f"Customer holds {product.holding_id}.")
+        ctx.trace.candidates.append(_row("ALREADY_HOLDS"))
+        return StepResult(
+            6, "pick_product", "ALREADY_HOLDS", "Customer already holds the product.",
+            outcome="silent",
+        )
+
+    eligible = filter_eligible([product], ctx.profile, ctx.features)
+    if not eligible:
+        ctx.trace.check("NOT_ELIGIBLE", False, f"{product.id} failed eligibility.")
+        ctx.trace.candidates.append(_row("NOT_ELIGIBLE"))
+        return StepResult(
+            6, "pick_product", "NOT_ELIGIBLE",
+            f"{product.id} failed the eligibility filter.", outcome="silent",
+        )
+    ctx.trace.check("NOT_ELIGIBLE", True, f"{product.id} passed eligibility.")
+    ctx.trace.candidates.append(_row())
+
     cap = rules.contact_cap(ctx)
     ctx.trace.check(cap.rule, cap.passed, cap.detail)
     if not cap.passed:
         return StepResult(
-            6,
-            "apply_rules",
-            cap.dropped or "CAP_30D",
-            cap.detail,
+            6, "pick_product", cap.dropped or "CAP_30D", cap.detail,
             outcome=cap.outcome or "hold",
         )
-    if ctx.profile and ctx.profile.dnd_registered:
-        dnd = rules.dnd_sms(ctx)
-        ctx.trace.check(dnd.rule, dnd.passed, dnd.detail)
 
-    live = [
-        candidate for candidate in ctx.candidates if candidate.eligible and candidate.score > 0
-    ]
-    for candidate in live:
-        for check in rules.CANDIDATE_RULES:
-            result = check(ctx, candidate)
-            ctx.trace.check(result.rule, result.passed, result.detail)
-            if result.dropped:
-                candidate.dropped = result.dropped
-                candidate.drop_outcome = result.outcome
-                break
-            candidate.reasons.extend(result.reasons)
-            if result.scheduled_for is not None:
-                candidate.scheduled_for = result.scheduled_for
+    ctx.product = product
+    ctx.template_id = f"cluster_{ctx.cluster_id}"
 
-    ctx.trace.candidates = [_row(candidate) for candidate in ctx.candidates]
-    viable = [candidate for candidate in live if candidate.dropped is None]
-    if viable:
+    from matchpoint.pipeline.context import ScoredProduct
+
+    single = ScoredProduct(product=product, eligible=True, score=1, uplift=1.0)
+    for check in rules.CANDIDATE_RULES:
+        result = check(ctx, single)
+        ctx.trace.check(result.rule, result.passed, result.detail)
+        if result.dropped:
+            ctx.product = None
+            return StepResult(
+                6, "pick_product", result.dropped, result.detail,
+                outcome=result.outcome or "hold",
+            )
+        for reason in result.reasons:
+            if reason not in ctx.reasons:
+                ctx.reasons.append(reason)
+        if result.scheduled_for is not None:
+            ctx.scheduled_for = result.scheduled_for
+
+    ctx.channel = single.channel
+    if ctx.channel is None:
         return StepResult(
-            6,
-            "apply_rules",
-            "OK",
-            f"{len(viable)} candidate(s) passed every rule",
+            6, "pick_product", "NO_CHANNEL_CONSENT",
+            "No consented channel is left for this customer.", outcome="hold",
         )
-    review = [candidate for candidate in live if candidate.dropped == "CREDIT_REVIEW"]
-    if review:
-        ctx.product = review[0].product
+
+    return StepResult(6, "pick_product", "OK", f"{product.id} picked for cluster {ctx.cluster_id}")
+
+
+def estimate_individual_gain(ctx: Context) -> StepResult:
+    """Step 7. Compute the individual kobo gain from the FeatureVector."""
+    if ctx.product is None or ctx.features is None:
         return StepResult(
-            6,
-            "apply_rules",
-            "CREDIT_REVIEW",
-            f"{len(review)} credit candidate(s) need a person; nothing else passed.",
-            outcome="review",
+            7, "estimate_individual_gain", "NO_MATCH",
+            "No product or features available.", outcome="silent",
         )
-    best = live[0] if live else None
-    if best is None:
-        return StepResult(
-            6, "apply_rules", "NO_MATCH", "No candidate reached the rules.", outcome="silent"
-        )
-    return StepResult(
-        6,
-        "apply_rules",
-        best.dropped or "NO_MATCH",
-        f"Every candidate was dropped; best was {best.product.id}: {best.dropped}.",
-        outcome=best.drop_outcome or "hold",
-    )
+    from matchpoint.pipeline.gain import estimate_gain
 
-
-def _row(candidate: ScoredProduct) -> Candidate:
-    return Candidate(
-        product_id=candidate.product.id,
-        eligible=candidate.eligible,
-        uplift=candidate.uplift,
-        dropped=candidate.dropped,
-    )
-
-
-def pick_one(ctx: Context) -> StepResult:
-    """Step 7. Take the top-scoring candidate that passed every rule."""
-    viable = [
-        candidate
-        for candidate in ctx.candidates
-        if candidate.eligible and candidate.score > 0 and candidate.dropped is None
-    ]
-    if not viable:
-        return StepResult(
-            7, "pick_one", "NO_MATCH", "No candidate passed every rule.", outcome="silent"
-        )
-    threshold = ctx.policy.min_uplift
-    above = [candidate for candidate in viable if candidate.uplift >= threshold]
-    if not above:
-        best = viable[0]
-        ctx.trace.check(
-            "LOW_UPLIFT",
-            False,
-            f"{best.product.id}: uplift {best.uplift:.3f} is below {threshold}",
-        )
-        return StepResult(
-            7,
-            "pick_one",
-            "LOW_UPLIFT",
-            "The best candidate is below the uplift threshold.",
-            outcome="hold",
-        )
-
-    remaining = ctx.policy.max_messages_per_30d - ctx.log.contacts_since(
-        ctx.customer_ref, ctx.as_of
-    )
-    ctx.trace.check(
-        "ATTENTION_BUDGET",
-        remaining > 0,
-        f"{remaining} of {ctx.policy.max_messages_per_30d} left",
-    )
-    if remaining <= 0:
-        return StepResult(
-            7,
-            "pick_one",
-            "ATTENTION_BUDGET",
-            "The customer's attention budget is spent.",
-            outcome="hold",
-        )
-
-    winner = above[0]
-    ctx.product = winner.product
-    ctx.channel = winner.channel
-    ctx.scheduled_for = winner.scheduled_for
-    ctx.reasons.extend(reason for reason in winner.reasons if reason not in ctx.reasons)
-    ctx.trace.check(
-        "LOW_UPLIFT",
-        True,
-        f"{winner.product.id}: uplift {winner.uplift:.3f} is above {threshold}",
-    )
+    ctx.gain_kobo = estimate_gain(ctx.product, ctx.features, ctx.transactions)
     return StepResult(
         7,
-        "pick_one",
+        "estimate_individual_gain",
         "OK",
-        f"{winner.product.id} won the slot at {winner.uplift:.3f} uplift",
+        f"gain_kobo={ctx.gain_kobo} for {ctx.product.id}",
     )
 
 
 def build_message(ctx: Context) -> StepResult:
-    """Step 8. Fill the approved template with evidence, the gain and key facts."""
-    if ctx.product is None:
+    """Step 8. Render the cluster template with the customer's evidence."""
+    if ctx.product is None or ctx.features is None or ctx.template_id is None:
         return StepResult(
             8,
             "build_message",
             "TEMPLATE_MISSING",
-            "No product was picked, so there is no message.",
+            "No product/features/template were picked, so there is no message.",
             outcome="silent",
         )
-    ctx.message, ctx.gain_kobo = explain(ctx.product, ctx.signals, ctx.transactions)
+    evidence = _evidence_from(ctx)
+    guarded, gain_kobo = explain(
+        ctx.product, ctx.features, ctx.transactions, ctx.template_id, evidence, ctx.policy
+    )
+    ctx.gain_kobo = gain_kobo
+    if guarded.blocked:
+        for check in guarded.checks:
+            ctx.trace.check(check.rule, check.passed, check.detail)
+        return StepResult(
+            8,
+            "build_message",
+            "GUARDRAIL_BLOCKED",
+            "Template render failed a copy check.",
+            outcome="hold",
+        )
+    ctx.message = guarded.message
     return StepResult(
-        8, "build_message", "OK", f"Message prepared for {ctx.product.id}"
+        8, "build_message", "OK",
+        f"Message prepared for {ctx.product.id} from {ctx.template_id}",
     )
 
 
 def guardrail(ctx: Context) -> StepResult:
-    """Step 9. Three CBN checks on the message before it can go out."""
-    if ctx.message is None:
+    """Step 9. Compliance checks on the message before it can go out."""
+    if ctx.message is None or ctx.profile is None:
         return StepResult(
-            9,
-            "guardrail",
-            "GUARDRAIL_BLOCKED",
-            "No message was available to check.",
-            outcome="hold",
+            9, "guardrail", "GUARDRAIL_BLOCKED",
+            "No message or profile available to check.", outcome="hold",
         )
-    checks = run_checks(ctx.message, ctx.policy)
+    checks = run_compliance_checks(ctx.message, ctx.profile, ctx.policy)
     for check in checks:
         ctx.trace.check(check.rule, check.passed, check.detail)
     if not all(check.passed for check in checks):
         ctx.message = None
         return StepResult(
-            9,
-            "guardrail",
-            "GUARDRAIL_BLOCKED",
-            "The message failed a safety check.",
-            outcome="hold",
+            9, "guardrail", "GUARDRAIL_BLOCKED",
+            "The message failed a safety check.", outcome="hold",
         )
-    return StepResult(9, "guardrail", "OK", "All three safety checks passed")
+    return StepResult(9, "guardrail", "OK", f"All {len(checks)} safety checks passed")
 
 
 def deliver(ctx: Context) -> StepResult:
     """Step 10. Choose the channel, call the gateway in live mode, write the log."""
     if ctx.product is None or ctx.message is None:
         return StepResult(
-            10,
-            "deliver",
-            "TEMPLATE_MISSING",
-            "Nothing was ready to deliver.",
-            outcome="hold",
+            10, "deliver", "TEMPLATE_MISSING", "Nothing was ready to deliver.", outcome="hold",
         )
     existing = ctx.log.get(
         decision_id(ctx.customer_ref, ctx.product.id, ctx.as_of, ctx.mode, ctx.epoch)
@@ -357,17 +335,11 @@ def deliver(ctx: Context) -> StepResult:
         return StepResult(10, "deliver", "OK", "Dry run: the gateway was not called")
     if ctx.channel is None:
         return StepResult(
-            10,
-            "deliver",
-            "NO_CHANNEL_CONSENT",
-            "No consented channel is left.",
-            outcome="hold",
+            10, "deliver", "NO_CHANNEL_CONSENT", "No consented channel is left.", outcome="hold",
         )
     if ctx.scheduled_for is not None and ctx.scheduled_for > ctx.as_of:
         return StepResult(
-            10,
-            "deliver",
-            "OK",
+            10, "deliver", "OK",
             f"Scheduled for {ctx.scheduled_for.isoformat()}; gateway not called now",
         )
 
@@ -380,6 +352,8 @@ def deliver(ctx: Context) -> StepResult:
         why=ctx.message.why,
         kind="marketing",
         product_id=ctx.product.id,
+        cluster_id=ctx.cluster_id,
+        template_id=ctx.template_id,
     )
     receipt = ctx.adapters.channels.send(msg, purpose="marketing")
     if receipt.status in ("accepted", "queued"):
@@ -394,17 +368,43 @@ def deliver(ctx: Context) -> StepResult:
             sent_at=receipt.at,
         )
         ctx.adapters.message_store.append(stored)
-        ctx.delivered = Delivery(
-            message_id=msg.id, at=receipt.at, status=receipt.status
-        )
-        return StepResult(
-            10, "deliver", "OK", f"{ctx.channel}: {receipt.status}"
-        )
+        ctx.delivered = Delivery(message_id=msg.id, at=receipt.at, status=receipt.status)
+        return StepResult(10, "deliver", "OK", f"{ctx.channel}: {receipt.status}")
     ctx.message = None
     return StepResult(
-        10,
-        "deliver",
-        "NO_CHANNEL_CONSENT",
-        f"{ctx.channel} rejected the message: {receipt.reason}",
-        outcome="hold",
+        10, "deliver", "NO_CHANNEL_CONSENT",
+        f"{ctx.channel} rejected the message: {receipt.reason}", outcome="hold",
     )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _cluster_for_product(product_id: str) -> int:
+    for cluster_id, mapped in ranker_infer.cluster_to_product().items():
+        if mapped == product_id:
+            try:
+                return int(cluster_id)
+            except ValueError:
+                continue
+    return -1
+
+
+def _evidence_from(ctx: Context) -> dict:
+    features = ctx.features
+    if features is None:
+        return {}
+    salary_day = features.time_payday or ""
+    salary_day_text = f"{salary_day}" if salary_day else "25th"
+    scheduled_for = ctx.scheduled_for or (ctx.as_of + timedelta(days=1))
+    return {
+        "time_payday": salary_day_text,
+        "freq_txns_per_month": features.freq_txns_per_month,
+        "bal_avg": features.bal_avg,
+        "balance_naira": features.bal_avg // 100,
+        "surplus_naira": features.amt_surplus // 100,
+        "scheduled_for": scheduled_for.isoformat(),
+        "cluster_description": "fit this product's typical profile",
+    }

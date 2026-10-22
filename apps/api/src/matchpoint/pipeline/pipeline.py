@@ -2,37 +2,42 @@
 
 Hard rules and earlier gates win because the run stops at the first step that does not
 proceed. The Decision is written to the append-only log exactly once per derived ID.
+
+In the cohort pipeline, the four middle steps are build_features / assign_cluster /
+pick_product / estimate_individual_gain. After the decision is recorded we emit a
+DecisionTrace on the event bus so the console can observe cluster_id, template_id,
+individual gain, compliance checks and the model version.
 """
 
 from __future__ import annotations
 
 from matchpoint.adapters.errors import CustomerNotFound
-from matchpoint.events.schemas import stream_event
+from matchpoint.events.schemas import ComplianceCheck, DecisionTrace, stream_event
 from matchpoint.pipeline.context import Context
 from matchpoint.pipeline.ids import decision_id
 from matchpoint.pipeline.schemas import REASON_CODES, Decision
 from matchpoint.pipeline.steps import (
-    apply_rules,
+    assign_cluster,
+    build_features,
     build_message,
     consent_gate,
     deliver,
-    detect,
+    estimate_individual_gain,
     guardrail,
     load_context,
-    match_products,
     opt_out_and_complaint,
-    pick_one,
+    pick_product,
 )
-from matchpoint.pipeline.trace import StepResult
+from matchpoint.pipeline.trace import MODEL_VERSION, StepResult
 
 STEPS = (
     consent_gate,
     opt_out_and_complaint,
     load_context,
-    detect,
-    match_products,
-    apply_rules,
-    pick_one,
+    build_features,
+    assign_cluster,
+    pick_product,
+    estimate_individual_gain,
     build_message,
     guardrail,
     deliver,
@@ -90,7 +95,8 @@ def _finish(ctx: Context, result: StepResult) -> Decision:
 
 
 def _record(ctx: Context, decision: Decision) -> Decision:
-    """Write the decision once and tell the stream: the decision first, its message next."""
+    """Write the decision once and tell the stream: the decision first, its message next,
+    then the DecisionTrace envelope."""
     is_new = ctx.log.get(decision.id) is None
     stored = ctx.log.append(decision)
     if is_new and ctx.events is not None:
@@ -121,4 +127,38 @@ def _record(ctx: Context, decision: Decision) -> Decision:
                     status=delivered.status,
                 )
             )
+        ctx.events.emit(_decision_trace(ctx, decision))
     return stored
+
+
+def _decision_trace(ctx: Context, decision: Decision) -> DecisionTrace:
+    feature_vector: dict = {}
+    if ctx.features is not None:
+        feature_vector = ctx.features.model_dump(mode="json")
+    compliance = [
+        ComplianceCheck(rule=rule.rule, passed=rule.passed, detail=rule.detail)
+        for rule in ctx.trace.rules
+    ]
+    eligibility_pass = all(
+        rule.passed
+        for rule in ctx.trace.rules
+        if rule.rule in {"NOT_ELIGIBLE", "ALREADY_HOLDS"}
+    )
+    guardrail_pass = all(
+        rule.passed
+        for rule in ctx.trace.rules
+        if rule.rule.startswith("CBN_") or rule.rule in {"NCC_DND", "COMPLAINT_OPEN"}
+    )
+    return DecisionTrace(
+        customer_ref=decision.customer_ref,
+        cluster_id=ctx.cluster_id,
+        product_id=decision.product_id,
+        feature_vector=feature_vector,
+        eligibility_pass=eligibility_pass,
+        compliance_checks=compliance,
+        individual_gain_kobo=ctx.gain_kobo,
+        template_id=ctx.template_id,
+        guardrail_pass=guardrail_pass,
+        model_version=MODEL_VERSION,
+        decided_at=decision.as_of,
+    )
