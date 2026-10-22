@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 
-from matchpoint.events.schemas import StreamEvent
+from matchpoint.events.schemas import DecisionTrace, StreamEvent, stream_event
 
 QUEUE_SIZE = 1_000
 
@@ -45,6 +45,10 @@ class EventBus:
             self._offer(event)
         else:
             self._loop.call_soon_threadsafe(self._offer, event)
+
+    def emit(self, trace: DecisionTrace) -> None:
+        """Publish a DecisionTrace as a `decision_trace` stream event."""
+        self.publish(stream_event("decision_trace", **trace.model_dump(mode="json")))
 
     def close(self) -> None:
         """End every open stream. The browser's EventSource reconnects by itself."""

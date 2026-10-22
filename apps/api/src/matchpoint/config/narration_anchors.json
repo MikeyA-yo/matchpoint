@@ -1,0 +1,69 @@
+{
+  "threshold": 0.35,
+  "anchors": {
+    "salary": {
+      "phrases": ["salary", "payroll", "monthly pay", "wages", "stipend"],
+      "trn_codes": ["SAL"]
+    },
+    "rent": {
+      "phrases": ["rent", "rental payment", "landlord", "house rent"],
+      "trn_codes": []
+    },
+    "school_fee": {
+      "phrases": ["school fee", "tuition", "wsc fee", "university fee"],
+      "trn_codes": []
+    },
+    "utility": {
+      "phrases": ["eedc", "ikedc", "ekedc", "water bill", "electricity", "nepa", "aedc"],
+      "trn_codes": ["BIL"]
+    },
+    "airtime": {
+      "phrases": ["mtn", "airtel", "glo", "9mobile", "airtime", "data bundle"],
+      "trn_codes": ["AIR"]
+    },
+    "nip_in": {
+      "phrases": ["nip inward", "nip in", "inward transfer", "nip credit"],
+      "trn_codes": ["NIPIN"]
+    },
+    "nip_out": {
+      "phrases": ["nip outward", "nip out", "outward transfer", "nip debit"],
+      "trn_codes": ["NIPOUT"]
+    },
+    "pos": {
+      "phrases": ["pos", "card purchase", "point of sale"],
+      "trn_codes": ["POS"]
+    },
+    "atm": {
+      "phrases": ["atm", "cash withdrawal", "atm withdrawal"],
+      "trn_codes": ["ATM"]
+    },
+    "reversal": {
+      "phrases": ["reversal", "reversed", "refund", "rvsl"],
+      "trn_codes": ["REV"]
+    },
+    "internal_transfer": {
+      "phrases": ["own account", "self transfer", "ia transfer", "intra bank transfer"],
+      "trn_codes": ["IA"]
+    },
+    "fee": {
+      "phrases": ["charge", "sms fee", "card maintenance", "cot", "service charge"],
+      "trn_codes": ["CHG", "FEE"]
+    },
+    "stamp_duty": {
+      "phrases": ["stamp duty", "sd fee", "edl", "cbn stamp"],
+      "trn_codes": ["SD"]
+    },
+    "remittance": {
+      "phrases": ["western union", "worldremit", "sendwave", "diaspora", "remittance"],
+      "trn_codes": ["REM"]
+    },
+    "business_inflow": {
+      "phrases": ["invoice", "customer payment", "pos settlement", "merchant"],
+      "trn_codes": []
+    },
+    "bet": {
+      "phrases": ["bet9ja", "sportybet", "1xbet", "betting", "nairabet"],
+      "trn_codes": []
+    }
+  }
+}

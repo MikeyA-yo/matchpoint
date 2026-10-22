@@ -69,6 +69,11 @@ class Profile(BaseModel):
     complaint_open: bool = False
     # NCC Do Not Disturb: promotional SMS must not be sent to a registered number.
     dnd_registered: bool = False
+    # Cohort assignment written by pipeline/cohort.py::run_batch. None means
+    # the customer has not been clustered yet; the real-time step falls back to
+    # ranker/infer.py::score_products.
+    cluster_id: int | None = None
+    cluster_assigned_at: datetime | None = None
     simulated: bool = False
 
 
@@ -133,6 +138,9 @@ class OutboundMessage(BaseModel):
     # Promotional SMS is subject to NCC DND; service messages are not.
     kind: MessagePurpose = "marketing"
     product_id: str | None = None
+    # Cohort provenance for the DecisionTrace; optional to stay backward compatible.
+    cluster_id: int | None = None
+    template_id: str | None = None
 
 
 DeliveryStatus = Literal["accepted", "queued", "rejected", "failed"]
@@ -176,3 +184,73 @@ class FulfilmentReceipt(BaseModel):
     at: datetime
     provider_ref: str | None = None
     reason: str | None = None
+
+
+class Balances(BaseModel):
+    """Balance roll-ups used by the feature builder. All amounts in kobo."""
+
+    avg: int = 0
+    min: int = 0
+    buffer_months: float = 0.0
+    turnover: int = 0
+
+
+class FeatureVector(BaseModel):
+    """Five groups of features per spec §1. Narration counts, frequency, amount,
+    timing, balances. Holdings are not a feature group; eligibility reads them
+    off the Profile directly."""
+
+    customer_ref: str
+    # narration counts (by classify_narration label)
+    narration_counts: dict[str, int] = Field(default_factory=dict)
+    # frequency
+    freq_txns_per_month: float = 0.0
+    freq_active_days: int = 0
+    freq_cadence_std: float = 0.0
+    # amount (kobo)
+    amt_median_credit: int = 0
+    amt_surplus: int = 0
+    amt_cv: float = 0.0
+    # timing
+    time_payday: int | None = None
+    time_days_to_rent: int | None = None
+    time_season_flag: bool = False
+    # balances (kobo)
+    bal_avg: int = 0
+    bal_min: int = 0
+    bal_buffer_months: float = 0.0
+    bal_turnover: int = 0
+
+    def to_dense(self) -> list[float]:
+        """Flat numeric vector for clustering/ranking. Narration counts are summed
+        into a single bag total; the per-label dict is kept on the model for the
+        trace but is not folded into the clustering matrix here."""
+        return [
+            float(sum(self.narration_counts.values())),
+            self.freq_txns_per_month,
+            float(self.freq_active_days),
+            self.freq_cadence_std,
+            float(self.amt_median_credit),
+            float(self.amt_surplus),
+            self.amt_cv,
+            float(self.time_payday or 0),
+            float(self.time_days_to_rent or 0),
+            1.0 if self.time_season_flag else 0.0,
+            float(self.bal_avg),
+            float(self.bal_min),
+            self.bal_buffer_months,
+            float(self.bal_turnover),
+        ]
+
+
+class ClusterAssignment(BaseModel):
+    customer_ref: str
+    cluster_id: int
+    assigned_at: datetime
+
+
+class ClusterModel(BaseModel):
+    cluster_id: int
+    product_id: str
+    model_version: str
+    trained_at: datetime

@@ -1,0 +1,6 @@
+{{ product_name }} for the next stage of life
+---
+Your account balance averages ₦{{ (bal_avg|default(0))|number }}.
+{% if gain_naira > 0 %}{{ product_name }} could add about ₦{{ gain_naira|number }} over {{ tenor_months|default(12) }} months, with no monthly fee.{% endif %}
+---
+You match customers at a quieter stage who prefer stability. You allowed personalised offers.
