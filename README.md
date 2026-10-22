@@ -2,6 +2,8 @@
 
 Decision layer that decides what to recommend, when, on which channel, and whether to say nothing. Design: [docs/api_design.md](docs/api_design.md).
 
+> **Responsible AI use:** how we used AI while building MATCHPOINT, day by day, and the human decisions behind it: [Responsible_AI_Use.md](Responsible_AI_Use.md).
+
 ## Layout
 
 ```
