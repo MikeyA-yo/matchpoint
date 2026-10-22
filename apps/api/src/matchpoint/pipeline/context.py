@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from matchpoint.clock import Clock
 from matchpoint.events.bus import EventBus
 from matchpoint.ledger.decision_log import DecisionLog
-from matchpoint.models import Channel, Consent, Product, Profile, Txn
+from matchpoint.models import Channel, Consent, FeatureVector, Product, Profile, Txn
 from matchpoint.pipeline.detector import Signal
 from matchpoint.pipeline.policy import Policy
 from matchpoint.pipeline.schemas import EvalMode, Message, Outcome
@@ -82,6 +82,11 @@ class Context:
     gain_kobo: int | None = None
     scheduled_for: datetime | None = None
     reasons: list[str] = field(default_factory=list)
+
+    # Cohort pipeline additions.
+    features: FeatureVector | None = None
+    cluster_id: int | None = None
+    template_id: str | None = None
 
     @property
     def holdings(self) -> tuple[str, ...]:

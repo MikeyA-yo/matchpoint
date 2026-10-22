@@ -4,6 +4,7 @@ A pilot swaps the transport for a Dataverse `contact` query. The connector maps
 whichever shape the transport returns into the domain Profile.
 """
 
+from datetime import datetime
 from typing import Protocol
 
 from matchpoint.adapters.errors import CustomerNotFound
@@ -40,5 +41,22 @@ class CustomerProfileImpl:
         if found is None:
             raise CustomerNotFound("CustomerProfile", f"unknown {customer_ref}")
         updated = found.model_copy(update={"holdings": holdings})
+        self._transport.write(customer_ref, updated)
+        return updated
+
+    def set_cluster(
+        self,
+        customer_ref: str,
+        cluster_id: int,
+        assigned_at: datetime,
+        *,
+        purpose: Purpose,
+    ) -> Profile:
+        found = self._transport.read(customer_ref)
+        if found is None:
+            raise CustomerNotFound("CustomerProfile", f"unknown {customer_ref}")
+        updated = found.model_copy(
+            update={"cluster_id": cluster_id, "cluster_assigned_at": assigned_at}
+        )
         self._transport.write(customer_ref, updated)
         return updated

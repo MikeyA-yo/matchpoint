@@ -53,6 +53,8 @@ class DecisionTrace(BaseModel):
     out of the per-request `Trace` wire shape so the console contract stays
     stable."""
 
+    model_config = {"protected_namespaces": ()}
+
     customer_ref: str
     cluster_id: int | None = None
     product_id: str | None = None

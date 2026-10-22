@@ -40,6 +40,16 @@ class CustomerProfile(Protocol):
     def get(self, customer_ref: str, *, purpose: Purpose) -> Profile: ...
     # Existence only, so an unknown ref can 404 without reading a profile.
     def exists(self, customer_ref: str, *, purpose: Purpose) -> RefExists: ...
+    # Cohort assignment: written by pipeline/cohort.run_batch. Reads happen
+    # through `.get(...)` because cluster_id lives on the Profile.
+    def set_cluster(
+        self,
+        customer_ref: str,
+        cluster_id: int,
+        assigned_at: datetime,
+        *,
+        purpose: Purpose,
+    ) -> Profile: ...
 
 
 class ConsentStore(Protocol):

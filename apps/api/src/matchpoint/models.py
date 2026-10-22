@@ -250,6 +250,8 @@ class ClusterAssignment(BaseModel):
 
 
 class ClusterModel(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
     cluster_id: int
     product_id: str
     model_version: str

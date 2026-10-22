@@ -147,14 +147,15 @@ def _build_cluster_map(
 
 
 def _default_for_profiles(cluster_id: int, profiles: list[Profile]) -> str:
-    """Majority-vote heuristic in lieu of simulator labels. Reads a hint from
-    the segment distribution so the demo clusters land on recognisable products."""
+    """Majority-vote heuristic in lieu of simulator labels. Reads hints from
+    the segment distribution so the demo clusters land on recognisable products.
+    The products returned here must be ones the segment can actually hold."""
     segments = Counter(p.segment or "" for p in profiles)
     top_segment = segments.most_common(1)[0][0] if segments else ""
     if top_segment == "sme":
         return "SME_GMB"
     if top_segment == "trader":
-        return "SME_GMB"
+        return "Save_4_me"
     if top_segment == "student":
         return "Aspire_Lite"
     if top_segment == "salaried":
@@ -207,7 +208,7 @@ def customer_refs_from_adapters(adapters: Any) -> list[str]:
     exposes DEMO_CUSTOMERS indirectly through the profile transport; we read
     that off the adapter's state if present, else return []."""
     profile = adapters.profile
-    inner = getattr(profile, "_target", profile)
+    inner = getattr(profile, "_inner", profile)
     transport = getattr(inner, "_transport", None)
     if transport is None:
         return []
