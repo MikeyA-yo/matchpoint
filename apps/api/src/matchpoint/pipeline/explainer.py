@@ -14,15 +14,16 @@ from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
-from typing import Any
-
-from jinja2 import Environment, FileSystemLoader, StrictUndefined, Template, select_autoescape
+from typing import TYPE_CHECKING, Any
 
 from matchpoint.models import FeatureVector, Product, Txn
 from matchpoint.pipeline import gain
 from matchpoint.pipeline.guardrail import Check, check_copy
 from matchpoint.pipeline.policy import DEFAULT_POLICY, Policy
 from matchpoint.pipeline.schemas import Message
+
+if TYPE_CHECKING:
+    from jinja2 import Environment, Template
 
 
 @dataclass(frozen=True)
@@ -110,7 +111,9 @@ def _naira(value: int) -> str:
 
 
 @lru_cache(maxsize=1)
-def _env() -> Environment:
+def _env() -> "Environment":
+    from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
+
     templates_dir = Path(
         str(resources.files("matchpoint.pipeline").joinpath("templates"))
     )
@@ -126,7 +129,7 @@ def _env() -> Environment:
     return env
 
 
-def _try_template(env: Environment, template_id: str) -> Template | None:
+def _try_template(env: "Environment", template_id: str) -> "Template | None":
     name = template_id if template_id.endswith(".j2") else f"{template_id}.j2"
     try:
         return env.get_template(name)

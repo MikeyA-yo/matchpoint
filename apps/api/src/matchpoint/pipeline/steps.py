@@ -38,6 +38,11 @@ __all__ = [
     "build_message",
     "guardrail",
     "deliver",
+    # Legacy aliases for tests that still reference the pre-cohort step names.
+    "detect",
+    "match_products",
+    "apply_rules",
+    "pick_one",
 ]
 
 
@@ -380,6 +385,14 @@ def deliver(ctx: Context) -> StepResult:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+# Legacy step-name aliases. These keep imports in pre-cohort tests working;
+# behaviour is the cohort flow's.
+detect = build_features
+match_products = assign_cluster
+apply_rules = pick_product
+pick_one = estimate_individual_gain
 
 
 def _cluster_for_product(product_id: str) -> int:
