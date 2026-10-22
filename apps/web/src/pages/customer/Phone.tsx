@@ -350,6 +350,8 @@ function Recommendation({ message: m, onDone, onOpen }: { message: Message; onDo
 
 function txnTitle(t: Transaction): string {
   if (t.narration.startsWith("SCHOOL FEES")) return "School fees";
+  if (t.narration.includes("ALLOWANCE")) return "Allowance";
+  if (t.narration.includes("BOOKS")) return "Books and course materials";
   if (t.narration.startsWith("WEB PMT/USD")) return "Online payment in USD";
   switch (t.kind) {
     case "salary": return "Salary";
@@ -655,6 +657,8 @@ const SIGNAL_WORDS: Record<string, string> = {
   pos_inflow_growth: "growing POS sales",
   international_spend: "dollar payments",
   recurring_bill_pattern: "regular bill payments",
+  allowance_regular: "monthly allowance",
+  education_spend: "book purchases",
 };
 
 function plainWhy(why: string): string {

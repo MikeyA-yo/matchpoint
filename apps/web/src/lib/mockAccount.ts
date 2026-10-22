@@ -35,7 +35,9 @@ const ATMS = ["ATM/ZENITH/IKEJA MALL", "ATM/ZENITH/VICTORIA ISLAND", "ATM/GTB/MA
 /** The trigger each activity gives the mock's decision engine (TRIGGERS in mock.ts). */
 export const ACTIVITY_TRIGGER: Record<ActivityKind, string> = {
   salary: "salary_regular",
+  allowance: "allowance_regular",
   school_fees: "fee_season",
+  textbooks: "education_spend",
   pos_sales: "pos_inflow_growth",
   dollar_payment: "international_spend",
   bills: "recurring_bill_pattern",
@@ -102,8 +104,9 @@ function historyRows(c: AccountHolder): Row[] {
     }
     if (c.segment === "student") {
       const allowance = 30_000 + Math.floor(r() * 4) * 5_000;
-      add(on(m, 1, 10, 5), "credit", "nip_in", allowance, `NIP/${pick(SENDERS)}/TRF FROM MUM`);
+      add(on(m, 1, 10, 5), "credit", "nip_in", allowance, `NIP/${pick(SENDERS)}/ALLOWANCE FROM MUM`);
       income += allowance;
+      if (m === 9) add(on(9, 14, 13, 25), "debit", "pos", 16_800, "POS/UNILAG BOOKSHOP");
     }
     if (business) {
       // POS takings settle every few days; they grow month on month when the trigger says so
@@ -189,8 +192,15 @@ export function postActivity(acct: Account, c: AccountHolder, kind: ActivityKind
       add(at, "credit", "salary", s.naira, `SALARY/${s.employer}/${month} ${at.slice(0, 4)}`);
       break;
     }
+    case "allowance":
+      add(at, "credit", "nip_in", 40_000, "NIP/OPAY/ALLOWANCE FROM MUM");
+      break;
     case "school_fees":
       add(at, "debit", "nip_out", 350_000, "SCHOOL FEES - GREENSPRING SCHOOL");
+      break;
+    case "textbooks":
+      add(at, "debit", "pos", 18_500, "POS/UNILAG BOOKSHOP");
+      add(later(3), "debit", "other", 9_200, "WEB PMT/JUMIA BOOKS - COURSE TEXTS");
       break;
     case "pos_sales":
       for (let k = 0; k < 4; k++) add(later(k * 7), "credit", "pos", nearest(38_000 + r() * 34_000, 100), `POS SETTLEMENT/MONIEPOINT TID ${2033 + k}`);

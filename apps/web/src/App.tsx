@@ -3,7 +3,7 @@ import { Layout } from "./components/Layout";
 import { Campaigns, Products } from "./pages/console/Catalogue";
 import { ConsolePage } from "./pages/console/ConsolePage";
 import { ReviewQueue, RunDecisions, SilenceFeed } from "./pages/console/Decisions";
-import { Audit, Events, Simulator } from "./pages/console/DemoControl";
+import { Audit, DemoData, Events, Simulator } from "./pages/console/DemoControl";
 import { Experiments, Model } from "./pages/console/Evidence";
 import { Overview } from "./pages/console/Overview";
 import { Policies } from "./pages/console/Policies";
@@ -31,6 +31,7 @@ export default function App() {
           <Route path="experiments" element={<Experiments />} />
           <Route path="model" element={<Model />} />
           <Route path="simulator" element={<Simulator />} />
+          <Route path="data" element={<DemoData />} />
           <Route path="events" element={<Events />} />
           <Route path="audit" element={<Audit />} />
         </Route>

@@ -38,6 +38,7 @@ const SECTIONS: { group: string; links: [to: string, label: string][] }[] = [
     group: "Sandbox",
     links: [
       ["/console/simulator", "Simulator"],
+      ["/console/data", "Demo data"],
       ["/console/events", "Event stream"],
       ["/console/audit", "Audit log"],
     ],
@@ -77,7 +78,7 @@ export function ConsolePage() {
         </aside>
         <div className="console-main">
           <div className="row-between" style={{ marginBottom: 20 }}>
-            <span className="env-tag">Sandbox</span>
+            <NavLink to="/console/data" className="env-tag env-link" title="Demo data: restore points and reset">Sandbox · Demo data</NavLink>
             <label className="role-picker small">
               <span className="muted">Role</span>
               <select className="select input-sm" style={{ width: "auto" }} value={role} onChange={(e) => changeRole(e.target.value as Role)}>

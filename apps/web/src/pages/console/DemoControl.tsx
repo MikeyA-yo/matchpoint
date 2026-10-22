@@ -4,6 +4,19 @@ import { Badge, Button, Card, Empty, ErrorNote, Field, Loading, Simulated } from
 import { useApi, useTechnical } from "../../lib/context";
 import { fmtDateTime, humanize } from "../../lib/format";
 import { useAction, useEventLog, useQuery } from "../../lib/hooks";
+import { getMode } from "../../lib/mode";
+import {
+  KEYS,
+  clearDemoData,
+  deleteRestorePoint,
+  demoDataKeys,
+  listRestorePoints,
+  restoreTo,
+  save,
+  saveRestorePoint,
+  sizeOf,
+  type RestorePoint,
+} from "../../lib/storage";
 import { PATTERNS, STREAM_EVENTS, type Pattern, type SimConfig, type StreamEventType } from "../../lib/types";
 import { ConsoleHead } from "./ConsolePage";
 
@@ -92,6 +105,141 @@ export function Simulator() {
           >
             Reset simulation
           </Button>
+        </Card>
+      </div>
+    </>
+  );
+}
+
+// ---------- Demo data in this browser: restore points and reset ----------
+
+const START_CONFIG: SimConfig = { seed: 42, n_customers: 5000, days: 120, scenario: "baseline" };
+
+export function DemoData() {
+  const api = useApi();
+  const live = getMode() === "live";
+  const [points, setPoints] = useState<RestorePoint[]>(listRestorePoints);
+  const [name, setName] = useState("");
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const current = Object.fromEntries(demoDataKeys().map((k) => [k, localStorage.getItem(k) ?? ""]));
+
+  const snapshot = (label: string): boolean => {
+    try {
+      saveRestorePoint(label);
+      setPoints(listRestorePoints());
+      return true;
+    } catch {
+      setNote({ ok: false, text: "Browser storage is full. Delete a restore point and try again." });
+      return false;
+    }
+  };
+
+  const restore = (p: RestorePoint) => {
+    if (!window.confirm(`Restore "${p.name}"? The current demo data in this browser will be replaced.`)) return;
+    restoreTo(p);
+    window.location.reload();
+  };
+
+  const resetAll = async () => {
+    const message = [
+      "Reset all demo data?",
+      "The demo customers stay, with their original balances and history. Offers, messages, added transactions, consent and rewards changes, sandbox dates and sign-up accounts are cleared.",
+      live ? "The API simulation restarts too." : "",
+      "You'll be signed out of the customer app. A restore point is saved first.",
+    ].filter(Boolean).join("\n\n");
+    if (!window.confirm(message)) return;
+    setResetting(true);
+    snapshot(`Before reset · ${fmtDateTime(new Date().toISOString())}`);
+    if (live) {
+      try {
+        await api.simStart(START_CONFIG);
+      } catch (e) {
+        setResetting(false);
+        setNote({ ok: false, text: `The API simulation wasn't reset: ${e instanceof Error ? e.message : String(e)}` });
+        return;
+      }
+    }
+    clearDemoData();
+    save(KEYS.session, null);
+    window.location.reload();
+  };
+
+  return (
+    <>
+      <ConsoleHead title="Demo data" />
+      <div className="stack">
+        <Card title="Restore points" sub={live ? "Restore points cover this browser's data, not the API's." : undefined}>
+          <div className="stack">
+            <div className="row">
+              <input
+                className="input"
+                style={{ flex: "1 1 220px", maxWidth: 360 }}
+                placeholder={`Restore point ${points.length + 1}`}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                aria-label="Restore point name"
+              />
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setNote(null);
+                  if (snapshot(name.trim() || `Restore point ${points.length + 1}`)) {
+                    setName("");
+                    setNote({ ok: true, text: "Saved." });
+                  }
+                }}
+              >
+                Save restore point
+              </Button>
+              <span className="small faint">Current data {sizeOf(current)}</span>
+            </div>
+            {note && (note.ok ? <span className="small ok-text">✓ {note.text}</span> : <div className="alert alert-error" role="alert">{note.text}</div>)}
+          </div>
+        </Card>
+
+        <Card title="Saved" actions={points.length > 0 && <span className="small faint">{points.length}</span>} bodyClass="">
+          {!points.length ? (
+            <Empty title="No restore points" />
+          ) : (
+            <div className="table-wrap">
+              <table className="table table-cards">
+                <thead><tr><th>Name</th><th>Saved</th><th className="num">Size</th><th /></tr></thead>
+                <tbody>
+                  {points.map((p) => (
+                    <tr key={p.id}>
+                      <td data-label="Name"><strong>{p.name}</strong></td>
+                      <td data-label="Saved" className="small muted">{fmtDateTime(p.saved_at)}</td>
+                      <td data-label="Size" className="num small muted">{sizeOf(p.data)}</td>
+                      <td data-label="">
+                        <div className="row" style={{ justifyContent: "flex-end", gap: 6 }}>
+                          <Button size="sm" onClick={() => restore(p)}>Restore</Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (!window.confirm(`Delete "${p.name}"?`)) return;
+                              deleteRestorePoint(p.id);
+                              setPoints(listRestorePoints());
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card title="Reset" endpoint={live ? "POST /sim/start" : undefined}>
+          <div className="row">
+            <Button variant="danger" loading={resetting} onClick={resetAll}>Reset all demo data</Button>
+            <span className="small faint">Saves a restore point first.</span>
+          </div>
         </Card>
       </div>
     </>

@@ -247,6 +247,7 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 
 .env-tag { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--amber-soft); color: var(--amber); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 .env-tag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.env-link:hover { background: rgba(245, 184, 61, 0.22); }
 
 /* ---------- simulate panel ---------- */
 

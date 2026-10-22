@@ -16,10 +16,12 @@ export const CONTACT_CHANNELS: Channel[] = ["app", "whatsapp", "sms", "ussd"];
 export const STAFF_ROLES: Role[] = ["product_owner", "campaign_manager", "compliance", "dpo"];
 export const PATTERNS: Pattern[] = ["salary_pattern", "fee_season", "sme_growth"];
 // Account events the sandbox can post for one customer (POST /sim/activity)
-export type ActivityKind = "salary" | "school_fees" | "pos_sales" | "dollar_payment" | "bills";
+export type ActivityKind = "salary" | "allowance" | "school_fees" | "textbooks" | "pos_sales" | "dollar_payment" | "bills";
 export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
   salary: "Salary received",
+  allowance: "Allowance received",
   school_fees: "School fees paid",
+  textbooks: "Textbooks bought",
   pos_sales: "POS sales received",
   dollar_payment: "Dollar payment online",
   bills: "DSTV and power paid",
@@ -27,7 +29,9 @@ export const ACTIVITY_LABEL: Record<ActivityKind, string> = {
 /** The pattern the API's /sim/inject plants for each activity, where it has one. */
 export const ACTIVITY_PATTERN: Record<ActivityKind, Pattern | null> = {
   salary: "salary_pattern",
+  allowance: null,
   school_fees: "fee_season",
+  textbooks: null,
   pos_sales: "sme_growth",
   dollar_payment: null,
   bills: null,

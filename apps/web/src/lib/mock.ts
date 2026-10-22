@@ -88,6 +88,8 @@ function rng(seed: number) {
   };
 }
 
+/** ["a", "b", "c"] -> "a, b and c" */
+const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : xs[0] ?? "");
 const round = (n: number, dp = 3) => Math.round(n * 10 ** dp) / 10 ** dp;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
@@ -156,6 +158,20 @@ const TRIGGERS: Record<string, TriggerDef> = {
     label: "online dollar payments",
     products: ["prd_domiciliary", "prd_virtual_card"],
   },
+  allowance_regular: {
+    evidence: "allowance on the 1st, 3 months",
+    sentence: "you receive an allowance at the start of each month",
+    category: "income",
+    label: "allowance payments",
+    products: ["prd_aspire", "prd_eazysave_classic"],
+  },
+  education_spend: {
+    evidence: "bookshop and course material payments",
+    sentence: "you pay for books and course materials",
+    category: "education",
+    label: "book purchases",
+    products: ["prd_aspire"],
+  },
   betting_spend: {
     evidence: "regular payments to betting merchants",
     sentence: "",
@@ -172,7 +188,8 @@ const BASE_UPLIFT: Record<string, number> = {
   prd_fixed_deposit: 0.06,
   prd_domiciliary: 0.058,
   prd_virtual_card: 0.036,
-  prd_aspire: 0.03,
+  // The student account is the natural first offer for a student
+  prd_aspire: 0.075,
   prd_timeless: 0.02,
   prd_salary_advance: 0.052,
   prd_personal_loan: 0.047,
@@ -588,7 +605,7 @@ function compose(product: Product, triggers: Trigger[]) {
   return {
     title: TITLES[product.id] ?? `${product.name} could help`,
     body: `${lead}${product.name} can help: ${product.features.map((f) => f.charAt(0).toLowerCase() + f.slice(1)).join(", ")}.`,
-    why: `Based on your ${labels.join(" and ")}. You allowed personalised offers.`,
+    why: `Based on your ${listOf(labels)}. You allowed personalised offers.`,
   };
 }
 
@@ -959,7 +976,7 @@ const routes: Route[] = [
       .sort((a, b) => b.uplift - a.uplift)
       .slice(0, 3);
     const labels = usable.map((t) => t.def.label);
-    const why = `Based on your ${labels.join(" and ")}. You allowed personalised offers.`;
+    const why = `Based on your ${listOf(labels)}. You allowed personalised offers.`;
     const items = scored.map(({ p }, i) => item(p, i + 1, why));
     if (items.length < 3) {
       items.push({
@@ -1128,7 +1145,7 @@ const routes: Route[] = [
   }],
   ["POST", /^\/sim\/activity$/, ({ db, body }) => {
     const clock = requireSim(db);
-    if (!(body.kind in ACTIVITY_TRIGGER)) fail(422, "VALIDATION_ERROR", "kind must be salary, school_fees, pos_sales, dollar_payment or bills.");
+    if (!(body.kind in ACTIVITY_TRIGGER)) fail(422, "VALIDATION_ERROR", "kind must be salary, allowance, school_fees, textbooks, pos_sales, dollar_payment or bills.");
     const kind = body.kind as ActivityKind;
     const c = getCustomer(db, body.customer_ref);
     const acct = accountOf(db, c);

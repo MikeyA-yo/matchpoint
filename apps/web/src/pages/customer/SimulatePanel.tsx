@@ -10,8 +10,10 @@ import { ACTIVITY_LABEL, ACTIVITY_PATTERN, type ActivityKind, type Decision } fr
 
 const ACTIVITIES: { kind: ActivityKind; label: string; money: "in" | "out" }[] = [
   { kind: "salary", label: "Salary arrives", money: "in" },
+  { kind: "allowance", label: "Allowance arrives", money: "in" },
   { kind: "pos_sales", label: "POS sales come in", money: "in" },
   { kind: "school_fees", label: "Pay school fees", money: "out" },
+  { kind: "textbooks", label: "Buy textbooks", money: "out" },
   { kind: "bills", label: "Pay DSTV and power", money: "out" },
   { kind: "dollar_payment", label: "Pay online in dollars", money: "out" },
 ];
