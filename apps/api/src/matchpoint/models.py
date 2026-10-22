@@ -69,6 +69,11 @@ class Profile(BaseModel):
     complaint_open: bool = False
     # NCC Do Not Disturb: promotional SMS must not be sent to a registered number.
     dnd_registered: bool = False
+    # Cohort assignment written by pipeline/cohort.py::run_batch. None means
+    # the customer has not been clustered yet; the real-time step falls back to
+    # ranker/infer.py::score_products.
+    cluster_id: int | None = None
+    cluster_assigned_at: datetime | None = None
     simulated: bool = False
 
 
