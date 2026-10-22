@@ -1,0 +1,23 @@
+{
+  "quiet_hours": {
+    "sms":      {"start": "20:00", "end": "08:00"},
+    "whatsapp": {"start": "21:00", "end": "07:00"},
+    "app":      {"start": "22:00", "end": "07:00"}
+  },
+  "frequency_cap": {
+    "max_messages_per_30d": 2,
+    "same_product_gap_days": 60,
+    "cooldown_after_ignored_days": 14
+  },
+  "blocked_categories": ["health", "religion", "politics", "betting"],
+  "opt_out_phrases": ["stop offers", "reply stop"],
+  "misleading_phrases": [
+    "guaranteed", "risk-free", "risk free", "no risk",
+    "instant approval", "free money", "double your money"
+  ],
+  "credit_gate": {
+    "requires_review": true,
+    "min_age": 21,
+    "require_salary_signal": true
+  }
+}

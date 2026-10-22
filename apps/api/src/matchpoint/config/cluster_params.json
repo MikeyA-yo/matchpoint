@@ -1,0 +1,9 @@
+{
+  "metric": "euclidean",
+  "min_cluster_size": 50,
+  "min_samples": 5,
+  "cluster_selection_epsilon": 0.0,
+  "cluster_selection_method": "eom",
+  "allow_single_cluster": false,
+  "small_cohort_min_cluster_size": 2
+}

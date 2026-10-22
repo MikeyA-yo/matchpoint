@@ -1,0 +1,208 @@
+{
+  "eaZySave_Classic": {
+    "age_min": 18,
+    "segment_in": ["salaried", "trader", "sme", "student"],
+    "holdings_forbidden": ["eazysave_classic", "savings_account"],
+    "credit_gate": false
+  },
+  "eaZySave_Premium": {
+    "age_min": 21,
+    "segment_in": ["salaried", "sme"],
+    "holdings_forbidden": ["eazysave_premium"],
+    "credit_gate": false
+  },
+  "Save_4_me": {
+    "age_min": 18,
+    "holdings_forbidden": ["save4me"],
+    "credit_gate": false
+  },
+  "Fixed_Deposit": {
+    "age_min": 21,
+    "holdings_forbidden": ["fixed_deposit"],
+    "credit_gate": false
+  },
+  "Aspire_Ultra": {
+    "age_min": 16, "age_max": 25,
+    "holdings_forbidden": ["aspire_ultra"],
+    "credit_gate": false
+  },
+  "Aspire_Ace": {
+    "age_min": 16, "age_max": 25,
+    "holdings_forbidden": ["aspire_ace"],
+    "credit_gate": false
+  },
+  "Aspire_Zeal": {
+    "age_min": 16, "age_max": 25,
+    "holdings_forbidden": ["aspire_zeal"],
+    "credit_gate": false
+  },
+  "Aspire_Lite": {
+    "age_min": 16, "age_max": 25,
+    "holdings_forbidden": ["aspire_lite"],
+    "credit_gate": false
+  },
+  "Timeless": {
+    "age_min": 60,
+    "holdings_forbidden": ["timeless"],
+    "credit_gate": false
+  },
+  "ZECA": {
+    "age_min": 0, "age_max": 15,
+    "holdings_forbidden": ["zeca"],
+    "parent_signal_required": "school_fee",
+    "credit_gate": false
+  },
+  "ZECA_Save": {
+    "age_min": 0, "age_max": 15,
+    "holdings_forbidden": ["zeca_save"],
+    "parent_signal_required": "school_fee",
+    "credit_gate": false
+  },
+  "Salary_Advance": {
+    "age_min": 21,
+    "segment_in": ["salaried"],
+    "holdings_forbidden": ["salary_advance"],
+    "credit_gate": true
+  },
+  "Personal_Loan": {
+    "age_min": 21,
+    "segment_in": ["salaried"],
+    "holdings_forbidden": ["personal_loan"],
+    "credit_gate": true
+  },
+  "Education_Loan": {
+    "age_min": 21,
+    "segment_in": ["salaried"],
+    "holdings_forbidden": ["education_loan"],
+    "credit_gate": true
+  },
+  "Credit_Card": {
+    "age_min": 21,
+    "segment_in": ["salaried", "sme"],
+    "holdings_forbidden": ["credit_card"],
+    "credit_gate": true
+  },
+  "Domiciliary_USD": {
+    "age_min": 18,
+    "signal_required": "remittance",
+    "holdings_forbidden": ["domiciliary_usd"],
+    "credit_gate": false
+  },
+  "Domiciliary_EUR": {
+    "age_min": 18,
+    "signal_required": "remittance",
+    "holdings_forbidden": ["domiciliary_eur"],
+    "credit_gate": false
+  },
+  "Domiciliary_GBP": {
+    "age_min": 18,
+    "signal_required": "remittance",
+    "holdings_forbidden": ["domiciliary_gbp"],
+    "credit_gate": false
+  },
+  "Diaspora_Account": {
+    "age_min": 18,
+    "signal_required": "remittance",
+    "holdings_forbidden": ["diaspora_account"],
+    "credit_gate": false
+  },
+  "FX_Card": {
+    "age_min": 18,
+    "holdings_forbidden": ["fx_card"],
+    "credit_gate": false
+  },
+  "PAPSS": {
+    "age_min": 18,
+    "signal_required": "remittance",
+    "holdings_forbidden": ["papss"],
+    "credit_gate": false
+  },
+  "SME_GMB": {
+    "segment_in": ["sme"],
+    "signal_required": "business_inflow",
+    "holdings_forbidden": ["sme_gmb"],
+    "credit_gate": false
+  },
+  "MSME_Loan": {
+    "segment_in": ["sme"],
+    "signal_required": "business_inflow",
+    "holdings_forbidden": ["msme_loan"],
+    "credit_gate": true
+  },
+  "Z_Woman_Premium": {
+    "segment_in": ["sme", "salaried"],
+    "holdings_forbidden": ["z_woman_premium"],
+    "credit_gate": false
+  },
+  "Overdraft": {
+    "segment_in": ["sme"],
+    "signal_required": "business_inflow",
+    "holdings_forbidden": ["overdraft"],
+    "credit_gate": true
+  },
+  "POS_Terminal": {
+    "segment_in": ["sme"],
+    "signal_required": "business_inflow",
+    "holdings_forbidden": ["pos_terminal"],
+    "credit_gate": false
+  },
+  "Debit_Card": {
+    "age_min": 18,
+    "holdings_forbidden": ["debit_card"],
+    "credit_gate": false
+  },
+  "Virtual_Card": {
+    "age_min": 18,
+    "holdings_forbidden": ["virtual_card"],
+    "credit_gate": false
+  },
+  "Prepaid_Card": {
+    "age_min": 16,
+    "holdings_forbidden": ["prepaid_card"],
+    "credit_gate": false
+  },
+  "Bills_Autopay": {
+    "age_min": 18,
+    "signal_required": "utility",
+    "holdings_forbidden": ["bills_autopay"],
+    "credit_gate": false
+  },
+  "prd_target_savings": {
+    "age_min": 18,
+    "holdings_forbidden": ["savings_account"],
+    "credit_gate": false
+  },
+  "prd_savings_round_up": {
+    "age_min": 18,
+    "holdings_forbidden": ["round_up_savings"],
+    "credit_gate": false
+  },
+  "prd_business_collections": {
+    "segment_in": ["sme"],
+    "holdings_forbidden": ["business_collections"],
+    "credit_gate": false
+  },
+  "prd_personal_loan": {
+    "age_min": 21,
+    "segment_in": ["salaried"],
+    "holdings_forbidden": ["personal_loan"],
+    "credit_gate": true
+  },
+  "prd_salary_advance": {
+    "age_min": 21,
+    "segment_in": ["salaried"],
+    "holdings_forbidden": ["salary_advance"],
+    "credit_gate": true
+  },
+  "prd_fx_card": {
+    "age_min": 18,
+    "segment_in": ["salaried", "sme"],
+    "holdings_forbidden": ["fx_card"],
+    "credit_gate": false
+  },
+  "prd_bills_autopay": {
+    "age_min": 18,
+    "holdings_forbidden": ["bills_autopay"],
+    "credit_gate": false
+  }
+}
