@@ -1,0 +1,6 @@
+Put your salary to work with {{ product_name }}
+---
+Your salary arrives on the {{ time_payday|default('25th') }} each month, with about ₦{{ (bal_avg|default(0))|number }} on average in your account.
+{% if gain_naira > 0 %}At an illustrative {{ rate_pct|default('10%') }} a year, {{ product_name }} could add about ₦{{ gain_naira|number }} over {{ tenor_months|default(12) }} months.{% endif %}
+---
+You match salaried customers whose salary comes on a steady day. You allowed personalised offers.
